@@ -1,6 +1,10 @@
-# WindowGrid
+<p align="center">
+  <img src="Resources/AppIcon.png" width="128" height="128" alt="WindowGrid Icon">
+</p>
 
-Open-source window management for macOS. Hold **Option** and drag any window to snap it into a grid zone.
+<h1 align="center">WindowGrid</h1>
+
+<p align="center">Open-source window management for macOS. Hold <b>Option</b> and drag any window to snap it into a grid zone.</p>
 
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
