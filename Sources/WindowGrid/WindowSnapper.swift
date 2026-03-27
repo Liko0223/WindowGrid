@@ -431,6 +431,12 @@ class WindowSnapper {
         return NSRunningApplication(processIdentifier: pidValue)?.bundleIdentifier
     }
 
+    /// Escape a string for safe inclusion in AppleScript string literals
+    private static func escapeForAppleScript(_ str: String) -> String {
+        str.replacingOccurrences(of: "\\", with: "\\\\")
+           .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
     private static let browserBundleIDs: Set<String> = [
         "com.google.Chrome", "com.google.Chrome.canary",
         "com.apple.Safari", "com.apple.SafariTechnologyPreview",
@@ -650,32 +656,17 @@ class WindowSnapper {
             // After a short delay, open remaining URLs in the same window
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 for tabURL in tabs.dropFirst() {
-                    if bundleID == "com.apple.Safari" {
-                        let script = """
-                            tell application id "\(bundleID)"
-                                tell front window
-                                    set newTab to make new tab
-                                    set URL of newTab to "\(tabURL)"
-                                end tell
+                    let script = """
+                        tell application id "\(bundleID)"
+                            tell front window
+                                set newTab to make new tab
+                                set URL of newTab to "\(escapeForAppleScript(tabURL))"
                             end tell
-                            """
-                        if let s = NSAppleScript(source: script) {
-                            var err: NSDictionary?
-                            s.executeAndReturnError(&err)
-                        }
-                    } else {
-                        let script = """
-                            tell application id "\(bundleID)"
-                                tell front window
-                                    set newTab to make new tab
-                                    set URL of newTab to "\(tabURL)"
-                                end tell
-                            end tell
-                            """
-                        if let s = NSAppleScript(source: script) {
-                            var err: NSDictionary?
-                            s.executeAndReturnError(&err)
-                        }
+                        end tell
+                        """
+                    if let s = NSAppleScript(source: script) {
+                        var err: NSDictionary?
+                        s.executeAndReturnError(&err)
                     }
                 }
             }
@@ -708,7 +699,7 @@ class WindowSnapper {
 
     /// Check and prompt for accessibility permission
     static func checkAccessibility() -> Bool {
-        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
     }
 }

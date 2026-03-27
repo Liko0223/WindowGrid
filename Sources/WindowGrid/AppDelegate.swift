@@ -1,5 +1,4 @@
 import AppKit
-import Carbon.HIToolbox
 
 class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     private var statusItem: NSStatusItem!

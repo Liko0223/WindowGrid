@@ -24,5 +24,7 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>WindowGrid needs accessibility access to move and resize windows.</string>
 </dict>
 </plist>
