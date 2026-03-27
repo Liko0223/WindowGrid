@@ -7,6 +7,10 @@
 <p align="center">Open-source window management for macOS. Hold <b>Option</b> and drag any window to snap it into a grid zone.</p>
 
 <p align="center">
+  English | <a href="README_CN.md">中文</a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/macOS-13%2B-blue" alt="macOS 13+">
   <img src="https://img.shields.io/badge/Swift-5.9-orange" alt="Swift">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
