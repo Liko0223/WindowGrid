@@ -80,6 +80,11 @@ class LayoutPanel: NSWindow {
         self.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    func setCurrentLayout(_ layout: GridLayout) {
+        currentLayout = layout
+        presetsView.setCurrentLayout(layout)
+    }
 }
 
 // MARK: - Presets Grid View
@@ -101,6 +106,11 @@ class PresetsGridView: NSView {
         presetButtons.forEach { $0.removeFromSuperview() }
         presetButtons.removeAll()
         setupPresets()
+    }
+
+    func setCurrentLayout(_ layout: GridLayout) {
+        currentLayout = layout
+        refreshPresets()
     }
 
     private func setupPresets() {
@@ -397,7 +407,7 @@ class CustomGridEditor: NSView {
             // Save with custom name
             let name = nameField.stringValue.isEmpty ? "Custom (\(baseRows)×\(baseCols))" : nameField.stringValue
             layout = GridLayout(name: name, baseRows: layout.baseRows, baseCols: layout.baseCols, zones: layout.zones)
-            ConfigStore.shared.setActiveLayout(layout)
+            ConfigStore.shared.saveLayout(layout)
             onSaved?()
         }
         onApply?(layout)

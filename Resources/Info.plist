@@ -26,5 +26,7 @@
     <true/>
     <key>NSAccessibilityUsageDescription</key>
     <string>WindowGrid needs accessibility access to move and resize windows.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>WindowGrid needs permission to control System Events so it can switch macOS desktops from the desktop toast.</string>
 </dict>
 </plist>

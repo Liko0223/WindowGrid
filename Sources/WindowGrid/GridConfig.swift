@@ -124,6 +124,137 @@ struct GridLayout: Codable, Equatable {
         tallLeft4, tallRight4, wideTop2, wideBottom2,
     ]
 
+    static func adaptive(forWindowCount count: Int, variant: Int = 0) -> GridLayout {
+        let variants = adaptiveVariants(forWindowCount: count)
+        guard !variants.isEmpty else { return .sixGrid }
+        return variants[variant % variants.count]
+    }
+
+    static func liveAdaptive(forWindowCount count: Int) -> GridLayout {
+        if count <= 1 {
+            return GridLayout(name: "Adaptive 1 (Full)", rows: 1, cols: 1)
+        }
+        return adaptive(forWindowCount: count)
+    }
+
+    static func adaptiveVariantCount(forWindowCount count: Int) -> Int {
+        adaptiveVariants(forWindowCount: count).count
+    }
+
+    static func adaptiveVariants(forWindowCount count: Int) -> [GridLayout] {
+        let windowCount = max(1, count)
+
+        switch windowCount {
+        case 1:
+            return [
+                GridLayout(
+                    name: "Adaptive 1 (Left Half)",
+                    baseRows: 1,
+                    baseCols: 2,
+                    zones: [Zone(row: 0, col: 0)]
+                ),
+                GridLayout(
+                    name: "Adaptive 1 (Right Half)",
+                    baseRows: 1,
+                    baseCols: 2,
+                    zones: [Zone(row: 0, col: 1)]
+                ),
+            ]
+        case 2:
+            return [
+                GridLayout(name: "Adaptive 2 (2-Column)", rows: 1, cols: 2),
+            ]
+        case 3:
+            return [
+                GridLayout(
+                    name: "Adaptive 3 (Left + 2 Right)",
+                    baseRows: 2,
+                    baseCols: 2,
+                    zones: [
+                        Zone(row: 0, col: 0, rowSpan: 2, colSpan: 1),
+                        Zone(row: 0, col: 1),
+                        Zone(row: 1, col: 1),
+                    ]
+                ),
+                GridLayout(
+                    name: "Adaptive 3 (2 Left + Right)",
+                    baseRows: 2,
+                    baseCols: 2,
+                    zones: [
+                        Zone(row: 0, col: 1, rowSpan: 2, colSpan: 1),
+                        Zone(row: 0, col: 0),
+                        Zone(row: 1, col: 0),
+                    ]
+                ),
+                GridLayout(name: "Adaptive 3 (3-Column)", rows: 1, cols: 3),
+                GridLayout(name: "Adaptive 3 (3-Row)", rows: 3, cols: 1),
+            ]
+        case 4:
+            return [
+                GridLayout(
+                    name: "Adaptive 4 (Large + Stack + Large)",
+                    baseRows: 2,
+                    baseCols: 3,
+                    zones: [
+                        Zone(row: 0, col: 0, rowSpan: 2, colSpan: 1),
+                        Zone(row: 0, col: 1),
+                        Zone(row: 1, col: 1),
+                        Zone(row: 0, col: 2, rowSpan: 2, colSpan: 1),
+                    ]
+                ),
+                GridLayout(name: "Adaptive 4 (2×2)", rows: 2, cols: 2),
+                GridLayout(name: "Adaptive 4 (4-Column)", rows: 1, cols: 4),
+            ]
+        case 5:
+            return [
+                tallLeft4,
+                tallRight4,
+            ]
+        case 6:
+            return [
+                sixGrid,
+                GridLayout(name: "Adaptive 6 (2×3)", rows: 3, cols: 2),
+            ]
+        case 7:
+            return [
+                GridLayout(
+                    name: "Adaptive 7 (1+6 Left)",
+                    baseRows: 2,
+                    baseCols: 4,
+                    zones: [
+                        Zone(row: 0, col: 0, rowSpan: 2, colSpan: 1),
+                        Zone(row: 0, col: 1), Zone(row: 0, col: 2), Zone(row: 0, col: 3),
+                        Zone(row: 1, col: 1), Zone(row: 1, col: 2), Zone(row: 1, col: 3),
+                    ]
+                ),
+                GridLayout(
+                    name: "Adaptive 7 (6+1 Right)",
+                    baseRows: 2,
+                    baseCols: 4,
+                    zones: [
+                        Zone(row: 0, col: 3, rowSpan: 2, colSpan: 1),
+                        Zone(row: 0, col: 0), Zone(row: 0, col: 1), Zone(row: 0, col: 2),
+                        Zone(row: 1, col: 0), Zone(row: 1, col: 1), Zone(row: 1, col: 2),
+                    ]
+                ),
+            ]
+        case 8:
+            return [
+                GridLayout(name: "Adaptive 8 (4×2)", rows: 2, cols: 4),
+                GridLayout(name: "Adaptive 8 (2×4)", rows: 4, cols: 2),
+            ]
+        case 9:
+            return [nineGrid]
+        default:
+            let cols = Int(ceil(sqrt(Double(windowCount))))
+            let rows = Int(ceil(Double(windowCount) / Double(cols)))
+            return [
+                GridLayout(name: "Adaptive \(windowCount) (\(cols)×\(rows))", rows: rows, cols: cols),
+                GridLayout(name: "Adaptive \(windowCount) (\(rows)×\(cols))", rows: cols, cols: rows),
+            ]
+        }
+    }
+
     // MARK: - Zone Rect Calculation
 
     func zoneRects(in screenFrame: NSRect) -> [(zone: Int, rect: NSRect)] {
