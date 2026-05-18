@@ -3,6 +3,8 @@
 *.xcodeproj/
 xcuserdata/
 DerivedData/
+dist/
 *.app
 .DS_Store
 *.zip
+*.dmg

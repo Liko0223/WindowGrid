@@ -2,6 +2,8 @@ import AppKit
 import ApplicationServices
 
 class WindowSnapper {
+    private static var tabbitSnapSerial = 0
+    private static var tabbitSnapSequences: [Int: Int] = [:]
 
     /// Get the window under the cursor that is being dragged (title bar hit test)
     static func getWindowUnderCursor(at nsPoint: NSPoint? = nil) -> AXUIElement? {
@@ -41,7 +43,8 @@ class WindowSnapper {
                   let windows = windowsRef as? [AXUIElement]
             else { continue }
 
-            for window in windows {
+            let manageableWindows = windows.filter { isManageableWindow($0) }
+            for window in manageableWindows {
                 var posRef: AnyObject?
                 AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &posRef)
                 guard let posRef = posRef else { continue }
@@ -53,7 +56,7 @@ class WindowSnapper {
                     return window
                 }
             }
-            return windows.first
+            return manageableWindows.first
         }
         return nil
     }
@@ -64,18 +67,149 @@ class WindowSnapper {
         guard let primaryHeight = NSScreen.screens.first?.frame.height else { return }
         let cgY = primaryHeight - rect.origin.y - rect.height
 
-        var position = CGPoint(x: rect.origin.x, y: cgY)
-        var size = CGSize(width: rect.width, height: rect.height)
+        let position = CGPoint(x: rect.origin.x, y: cgY)
+        let size = CGSize(width: rect.width, height: rect.height)
+        let bundleID = bundleIDForWindow(window)
 
-        guard let posValue = AXValueCreate(.cgPoint, &position),
-              let sizeValue = AXValueCreate(.cgSize, &size)
-        else { return }
+        if bundleID == "com.tabbit-ai.Tabbit",
+           snapTabbitWindow(window, position: position, size: size) {
+            return
+        }
 
         // Set position first, then size (some apps need this order)
-        AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posValue)
-        AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
+        applyFrame(window, position: position, size: size, sizeFirst: false)
         // Set position again in case size change shifted it
-        AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posValue)
+        applyFrame(window, position: position, size: size, sizeFirst: false)
+    }
+
+    private static func snapTabbitWindow(_ window: AXUIElement, position: CGPoint, size: CGSize) -> Bool {
+        guard let oldPosition = getAXPosition(window),
+              let windowID = findTabbitWindowID(matching: oldPosition)
+        else { return false }
+
+        tabbitSnapSerial += 1
+        let sequence = tabbitSnapSerial
+        tabbitSnapSequences[windowID] = sequence
+
+        let targetBounds = appleScriptBounds(position: position, size: size)
+        guard setTabbitBounds(windowID: windowID, bounds: targetBounds) else { return false }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            guard tabbitSnapSequences[windowID] == sequence else { return }
+            _ = setTabbitBounds(windowID: windowID, bounds: targetBounds)
+        }
+
+        return true
+    }
+
+    private static func appleScriptBounds(position: CGPoint, size: CGSize) -> (left: Int, top: Int, right: Int, bottom: Int) {
+        (
+            left: Int(round(position.x)),
+            top: Int(round(position.y)),
+            right: Int(round(position.x + size.width)),
+            bottom: Int(round(position.y + size.height))
+        )
+    }
+
+    private static func findTabbitWindowID(matching referencePosition: CGPoint) -> Int? {
+        let referenceX = Int(round(referencePosition.x))
+        let referenceY = Int(round(referencePosition.y))
+
+        let script = """
+            tell application id "com.tabbit-ai.Tabbit"
+                set bestID to 0
+                set bestScore to 100000000
+                set windowCount to count of windows
+                repeat with i from 1 to windowCount
+                    try
+                        set b to bounds of window i
+                        set dx to (item 1 of b) - \(referenceX)
+                        if dx < 0 then set dx to -dx
+                        set dy to (item 2 of b) - \(referenceY)
+                        if dy < 0 then set dy to -dy
+                        set score to dx + dy
+                        if score < bestScore then
+                            set bestScore to score
+                            set bestID to id of window i
+                        end if
+                    end try
+                end repeat
+                if bestID is 0 then error "No matching Tabbit window"
+                return bestID as text
+            end tell
+            """
+
+        guard let appleScript = NSAppleScript(source: script) else { return nil }
+        var error: NSDictionary?
+        let result = appleScript.executeAndReturnError(&error)
+        if let error = error {
+            NSLog("WindowGrid: Tabbit window id lookup failed: \(error)")
+            return nil
+        }
+
+        return result.stringValue.flatMap(Int.init)
+    }
+
+    private static func setTabbitBounds(
+        windowID: Int,
+        bounds: (left: Int, top: Int, right: Int, bottom: Int)
+    ) -> Bool {
+        let script = """
+            tell application id "com.tabbit-ai.Tabbit"
+                repeat with w in windows
+                    try
+                        if (id of w) is \(windowID) then
+                            set bounds of w to {\(bounds.left), \(bounds.top), \(bounds.right), \(bounds.bottom)}
+                            return "ok"
+                        end if
+                    end try
+                end repeat
+                error "No matching Tabbit window id"
+            end tell
+            """
+
+        guard let appleScript = NSAppleScript(source: script) else { return false }
+        var error: NSDictionary?
+        let result = appleScript.executeAndReturnError(&error)
+        if let error = error {
+            NSLog("WindowGrid: Tabbit AppleScript snap failed: \(error)")
+            return false
+        }
+
+        return result.stringValue == "ok"
+    }
+
+    private static func applyFrame(
+        _ window: AXUIElement,
+        position: CGPoint,
+        size: CGSize,
+        sizeFirst: Bool
+    ) {
+        var targetPosition = position
+        var targetSize = size
+
+        guard let posValue = AXValueCreate(.cgPoint, &targetPosition),
+              let sizeValue = AXValueCreate(.cgSize, &targetSize)
+        else { return }
+
+        if sizeFirst {
+            AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
+            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posValue)
+        } else {
+            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posValue)
+            AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeValue)
+        }
+    }
+
+    private static func getAXPosition(_ window: AXUIElement) -> CGPoint? {
+        var posRef: AnyObject?
+        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &posRef) == .success,
+              let posRef = posRef
+        else { return nil }
+
+        var position = CGPoint.zero
+        AXValueGetValue(posRef as! AXValue, .cgPoint, &position)
+        return position
     }
 
     /// Get all visible windows in most-recently-used order (front to back).
@@ -141,6 +275,8 @@ class WindowSnapper {
 
             // Match CG window to AX window by position
             for axWindow in axWindows {
+                guard isManageableWindow(axWindow) else { continue }
+
                 var posRef: AnyObject?
                 AXUIElementCopyAttributeValue(axWindow, kAXPositionAttribute as CFString, &posRef)
                 guard let posRef = posRef else { continue }
@@ -171,6 +307,29 @@ class WindowSnapper {
             }
         }
         return result
+    }
+
+    private static func isManageableWindow(_ window: AXUIElement, requireTitle: Bool = false) -> Bool {
+        var minimizedRef: AnyObject?
+        AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimizedRef)
+        if let minimized = minimizedRef as? Bool, minimized { return false }
+
+        var roleRef: AnyObject?
+        AXUIElementCopyAttributeValue(window, kAXRoleAttribute as CFString, &roleRef)
+        guard (roleRef as? String) == "AXWindow" else { return false }
+
+        var subroleRef: AnyObject?
+        AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &subroleRef)
+        if (subroleRef as? String) == "AXUnknown" { return false }
+
+        if requireTitle {
+            var titleRef: AnyObject?
+            AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef)
+            let title = titleRef as? String ?? ""
+            if title.isEmpty { return false }
+        }
+
+        return true
     }
 
     /// Get a window's current frame in CG coordinates (top-left origin), returned as NSRect (bottom-left origin)
@@ -248,21 +407,7 @@ class WindowSnapper {
                   let windows = windowsRef as? [AXUIElement] else { continue }
 
             for window in windows {
-                // Skip minimized windows
-                var minimizedRef: AnyObject?
-                AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimizedRef)
-                if let minimized = minimizedRef as? Bool, minimized { continue }
-
-                // Skip windows that aren't standard (must have AXWindow role)
-                var roleRef: AnyObject?
-                AXUIElementCopyAttributeValue(window, kAXRoleAttribute as CFString, &roleRef)
-                guard (roleRef as? String) == "AXWindow" else { continue }
-
-                // Skip windows without a title (often system/background windows)
-                var titleRef: AnyObject?
-                AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef)
-                let title = titleRef as? String ?? ""
-                guard !title.isEmpty else { continue }
+                guard isManageableWindow(window, requireTitle: true) else { continue }
 
                 // Get position and size
                 guard let rect = getWindowRect(window) else { continue }
@@ -454,6 +599,77 @@ class WindowSnapper {
 
     static func isBrowser(_ bundleID: String) -> Bool {
         browserBundleIDs.contains(bundleID)
+    }
+
+    static func openNewBrowserWindow(preferredBundleID: String = "com.tabbit-ai.Tabbit") -> Bool {
+        guard let bundleID = resolveBrowserBundleID(preferredBundleID),
+              let appName = appNameForBundleID(bundleID)
+        else {
+            return false
+        }
+
+        if openBrowserWindowViaAppleScript(bundleID: bundleID) {
+            return true
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        if bundleID == "com.apple.Safari" {
+            process.arguments = ["-na", appName]
+        } else {
+            process.arguments = ["-na", appName, "--args", "--new-window"]
+        }
+
+        do {
+            try process.run()
+            return true
+        } catch {
+            NSLog("WindowGrid: Failed to open browser window for \(bundleID): \(error)")
+            return false
+        }
+    }
+
+    private static func openBrowserWindowViaAppleScript(bundleID: String) -> Bool {
+        let script: String
+        if bundleID == "com.apple.Safari" {
+            script = """
+                tell application id "\(bundleID)"
+                    make new document
+                end tell
+                """
+        } else {
+            script = """
+                tell application id "\(bundleID)"
+                    make new window
+                end tell
+                """
+        }
+
+        guard let appleScript = NSAppleScript(source: script) else { return false }
+        var error: NSDictionary?
+        appleScript.executeAndReturnError(&error)
+        if let error = error {
+            NSLog("WindowGrid: AppleScript new browser window failed for \(bundleID): \(error)")
+            return false
+        }
+        return true
+    }
+
+    private static func resolveBrowserBundleID(_ preferredBundleID: String) -> String? {
+        if NSWorkspace.shared.urlForApplication(withBundleIdentifier: preferredBundleID) != nil {
+            return preferredBundleID
+        }
+
+        guard let url = URL(string: "https://example.com"),
+              let appURL = NSWorkspace.shared.urlForApplication(toOpen: url),
+              let bundleID = Bundle(url: appURL)?.bundleIdentifier
+        else {
+            return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Safari") == nil
+                ? nil
+                : "com.apple.Safari"
+        }
+
+        return bundleID
     }
 
     struct BrowserWindowInfo {
@@ -698,6 +914,10 @@ class WindowSnapper {
     }
 
     /// Check and prompt for accessibility permission
+    static var isAccessibilityTrusted: Bool {
+        AXIsProcessTrusted()
+    }
+
     static func checkAccessibility() -> Bool {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
