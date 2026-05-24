@@ -7,6 +7,7 @@ protocol LayoutPanelDelegate: AnyObject {
 class LayoutPanel: NSWindow {
     weak var layoutDelegate: LayoutPanelDelegate?
     private var presetsView: PresetsGridView!
+    private var presetsScrollView: NSScrollView!
     private var customEditor: CustomGridEditor!
     private var segmentControl: NSSegmentedControl!
     private var currentLayout: GridLayout
@@ -52,14 +53,23 @@ class LayoutPanel: NSWindow {
         let contentArea = NSRect(x: 0, y: 0, width: container.bounds.width, height: container.bounds.height - 60)
 
         // Presets view
+        presetsScrollView = NSScrollView(frame: contentArea)
+        presetsScrollView.autoresizingMask = [.width, .height]
+        presetsScrollView.hasVerticalScroller = true
+        presetsScrollView.hasHorizontalScroller = false
+        presetsScrollView.autohidesScrollers = true
+        presetsScrollView.drawsBackground = false
+        presetsScrollView.borderType = .noBorder
+
         presetsView = PresetsGridView(frame: contentArea, currentLayout: currentLayout)
-        presetsView.autoresizingMask = [.width, .height]
+        presetsView.autoresizingMask = [.width]
         presetsView.onSelect = { [weak self] layout in
             guard let self = self else { return }
             self.currentLayout = layout
             self.layoutDelegate?.layoutPanel(self, didSelectLayout: layout)
         }
-        container.addSubview(presetsView)
+        presetsScrollView.documentView = presetsView
+        container.addSubview(presetsScrollView)
 
         // Custom editor
         customEditor = CustomGridEditor(frame: contentArea)
@@ -77,7 +87,7 @@ class LayoutPanel: NSWindow {
     }
 
     @objc private func segmentChanged(_ sender: NSSegmentedControl) {
-        presetsView.isHidden = sender.selectedSegment != 0
+        presetsScrollView.isHidden = sender.selectedSegment != 0
         customEditor.isHidden = sender.selectedSegment != 1
     }
 
@@ -98,10 +108,21 @@ class PresetsGridView: NSView {
     var onSelect: ((GridLayout) -> Void)?
     private var currentLayout: GridLayout
     private var presetButtons: [NSButton] = []
+    private let columns = 3
+    private let buttonWidth: CGFloat = 140
+    private let buttonHeight: CGFloat = 100
+    private let horizontalPadding: CGFloat = 20
+    private let verticalPadding: CGFloat = 15
+    private let outerPadding: CGFloat = 20
+
+    override var isFlipped: Bool {
+        true
+    }
 
     init(frame: NSRect, currentLayout: GridLayout) {
         self.currentLayout = currentLayout
         super.init(frame: frame)
+        updateContentSize()
         setupPresets()
     }
 
@@ -110,6 +131,7 @@ class PresetsGridView: NSView {
     func refreshPresets() {
         presetButtons.forEach { $0.removeFromSuperview() }
         presetButtons.removeAll()
+        updateContentSize()
         setupPresets()
     }
 
@@ -120,21 +142,18 @@ class PresetsGridView: NSView {
 
     private func setupPresets() {
         let presets = ConfigStore.shared.allLayouts
-        let cols = 3
-        let btnW: CGFloat = 140
-        let btnH: CGFloat = 100
-        let padX: CGFloat = 20
-        let padY: CGFloat = 15
-        let startX: CGFloat = (bounds.width - CGFloat(cols) * (btnW + padX) + padX) / 2
-        let startY: CGFloat = bounds.height - btnH - 20
+        let startX = max(
+            outerPadding,
+            (bounds.width - CGFloat(columns) * (buttonWidth + horizontalPadding) + horizontalPadding) / 2
+        )
 
         for (index, preset) in presets.enumerated() {
-            let col = index % cols
-            let row = index / cols
-            let x = startX + CGFloat(col) * (btnW + padX)
-            let y = startY - CGFloat(row) * (btnH + padY)
+            let col = index % columns
+            let row = index / columns
+            let x = startX + CGFloat(col) * (buttonWidth + horizontalPadding)
+            let y = outerPadding + CGFloat(row) * (buttonHeight + verticalPadding)
 
-            let btn = PresetButton(frame: NSRect(x: x, y: y, width: btnW, height: btnH), layout: preset)
+            let btn = PresetButton(frame: NSRect(x: x, y: y, width: buttonWidth, height: buttonHeight), layout: preset)
             btn.target = self
             btn.action = #selector(presetClicked(_:))
             btn.tag = index
@@ -161,6 +180,15 @@ class PresetsGridView: NSView {
         (sender as? PresetButton)?.setSelected(true)
 
         onSelect?(preset)
+    }
+
+    private func updateContentSize() {
+        let rowCount = Int(ceil(Double(ConfigStore.shared.allLayouts.count) / Double(columns)))
+        let contentHeight = outerPadding * 2
+            + CGFloat(rowCount) * buttonHeight
+            + CGFloat(max(0, rowCount - 1)) * verticalPadding
+        let height = max(superview?.bounds.height ?? bounds.height, contentHeight)
+        frame.size = NSSize(width: frame.width, height: height)
     }
 }
 
