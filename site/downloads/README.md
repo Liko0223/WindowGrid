@@ -1,9 +1,9 @@
 # Downloads
 
-Put the current release DMG here before running a direct Cloudflare Pages deploy:
+The website's primary download button points directly to the latest GitHub Release asset:
 
 ```text
-site/downloads/WindowGrid-macOS.dmg
+https://github.com/Liko0223/WindowGrid/releases/latest/download/WindowGrid-macOS.dmg
 ```
 
-DMG files are ignored by the repository's root `.gitignore`, so direct Wrangler deploys can include a local release asset without committing the binary.
+This folder is kept only for optional manual deploy experiments. DMG files are ignored by the repository's root `.gitignore`.
