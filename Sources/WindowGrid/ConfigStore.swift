@@ -529,12 +529,39 @@ struct DesktopSpace: Hashable {
     }
 }
 
+struct BrowserChoice: Equatable {
+    let name: String
+    let bundleID: String
+
+    static let defaultBundleID = "com.google.Chrome"
+
+    static let all: [BrowserChoice] = [
+        BrowserChoice(name: "Chrome", bundleID: "com.google.Chrome"),
+        BrowserChoice(name: "Tabbit", bundleID: "com.tabbit-ai.Tabbit"),
+        BrowserChoice(name: "Safari", bundleID: "com.apple.Safari"),
+        BrowserChoice(name: "Edge", bundleID: "com.microsoft.edgemac"),
+        BrowserChoice(name: "Brave", bundleID: "com.brave.Browser"),
+        BrowserChoice(name: "Arc", bundleID: "company.thebrowser.Browser"),
+        BrowserChoice(name: "Firefox", bundleID: "org.mozilla.firefox"),
+        BrowserChoice(name: "Chromium", bundleID: "org.chromium.Chromium")
+    ]
+
+    var isInstalled: Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) != nil
+    }
+
+    static func name(for bundleID: String) -> String {
+        all.first(where: { $0.bundleID == bundleID })?.name ?? bundleID
+    }
+}
+
 struct AppConfig: Codable {
     var activeLayoutName: String
     var layouts: [GridLayout]
     var modifierKey: String
     var arrangeShortcut: KeyboardShortcut?
     var newBrowserShortcut: KeyboardShortcut?
+    var newBrowserBundleID: String
     var adaptiveArrangeEnabled: Bool
     var liveAdaptiveGridEnabled: Bool
     var layoutAssignments: [String: String]
@@ -549,6 +576,7 @@ struct AppConfig: Codable {
         modifierKey: String,
         arrangeShortcut: KeyboardShortcut? = .defaultArrange,
         newBrowserShortcut: KeyboardShortcut? = .defaultNewBrowser,
+        newBrowserBundleID: String = BrowserChoice.defaultBundleID,
         adaptiveArrangeEnabled: Bool = false,
         liveAdaptiveGridEnabled: Bool = false,
         layoutAssignments: [String: String] = [:],
@@ -562,6 +590,7 @@ struct AppConfig: Codable {
         self.modifierKey = modifierKey
         self.arrangeShortcut = arrangeShortcut
         self.newBrowserShortcut = newBrowserShortcut
+        self.newBrowserBundleID = newBrowserBundleID
         self.adaptiveArrangeEnabled = adaptiveArrangeEnabled
         self.liveAdaptiveGridEnabled = liveAdaptiveGridEnabled
         self.layoutAssignments = layoutAssignments
@@ -584,6 +613,7 @@ struct AppConfig: Codable {
         modifierKey = try container.decodeIfPresent(String.self, forKey: .modifierKey) ?? "control"
         arrangeShortcut = try container.decodeIfPresent(KeyboardShortcut.self, forKey: .arrangeShortcut) ?? .defaultArrange
         newBrowserShortcut = try container.decodeIfPresent(KeyboardShortcut.self, forKey: .newBrowserShortcut) ?? .defaultNewBrowser
+        newBrowserBundleID = try container.decodeIfPresent(String.self, forKey: .newBrowserBundleID) ?? BrowserChoice.defaultBundleID
         adaptiveArrangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .adaptiveArrangeEnabled) ?? false
         liveAdaptiveGridEnabled = try container.decodeIfPresent(Bool.self, forKey: .liveAdaptiveGridEnabled) ?? false
         layoutAssignments = try container.decodeIfPresent([String: String].self, forKey: .layoutAssignments) ?? [:]
@@ -663,6 +693,15 @@ class ConfigStore {
 
     func setNewBrowserShortcut(_ shortcut: KeyboardShortcut?) {
         config.newBrowserShortcut = shortcut
+        save()
+    }
+
+    var newBrowserBundleID: String {
+        config.newBrowserBundleID
+    }
+
+    func setNewBrowserBundleID(_ bundleID: String) {
+        config.newBrowserBundleID = bundleID
         save()
     }
 
@@ -747,7 +786,8 @@ class ConfigStore {
 
     func toastPosition(for screen: NSScreen) -> NSPoint? {
         let context = LayoutContext.current(for: screen)
-        if let position = config.toastPositions[context.displayKey]?.point {
+        if let position = config.toastPositions[context.displayKey]?.point,
+           screen.visibleFrame.insetBy(dx: -80, dy: -80).contains(position) {
             return position
         }
         if let legacyPosition = config.toastPosition?.point,

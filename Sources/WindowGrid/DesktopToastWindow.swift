@@ -8,8 +8,10 @@ protocol DesktopToastWindowDelegate: AnyObject {
 
 final class DesktopToastWindow: NSWindow {
     weak var toastDelegate: DesktopToastWindowDelegate?
+    private(set) var targetDisplayID: UInt32?
     private let toastView = DesktopToastView(frame: NSRect(x: 0, y: 0, width: 120, height: 46))
     private var hideWorkItem: DispatchWorkItem?
+    private var presentationGeneration = 0
 
     init() {
         super.init(
@@ -21,8 +23,8 @@ final class DesktopToastWindow: NSWindow {
 
         isOpaque = false
         backgroundColor = .clear
-        level = .floating
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        level = .statusBar
+        collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         hasShadow = false
         isMovableByWindowBackground = true
         contentView = toastView
@@ -50,6 +52,10 @@ final class DesktopToastWindow: NSWindow {
 
     func show(title: String, name: String?, near screen: NSScreen, savedPosition: NSPoint?) {
         cancelScheduledHide()
+        presentationGeneration += 1
+        let displayID = LayoutContext.displayID(for: screen)
+        let wasAlreadyVisibleOnDisplay = isVisible && alphaValue > 0.01 && targetDisplayID == displayID
+        targetDisplayID = displayID
         toastView.set(title: title, name: name)
         let preferredSize = toastView.preferredSize(maxWidth: screen.visibleFrame.width - 48)
 
@@ -61,24 +67,38 @@ final class DesktopToastWindow: NSWindow {
         setFrameOrigin(targetOrigin)
         orderFrontRegardless()
 
+        let generation = presentationGeneration
+        if wasAlreadyVisibleOnDisplay {
+            alphaValue = 1
+            scheduleHide(after: 1.35)
+            return
+        }
+
+        alphaValue = 0
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.16
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             animator().alphaValue = 1
+        } completionHandler: { [weak self] in
+            guard let self, self.presentationGeneration == generation else { return }
+            self.alphaValue = 1
         }
 
-        scheduleHide(after: 4.0)
+        scheduleHide(after: 1.35)
     }
 
     func hide() {
         cancelScheduledHide()
+        presentationGeneration += 1
+        let generation = presentationGeneration
 
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.18
+            context.duration = 0.12
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             animator().alphaValue = 0
         }, completionHandler: { [weak self] in
-            self?.orderOut(nil)
+            guard let self, self.presentationGeneration == generation else { return }
+            self.orderOut(nil)
         })
     }
 
