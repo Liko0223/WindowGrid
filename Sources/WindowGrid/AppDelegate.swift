@@ -682,7 +682,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         cycleAdaptiveLayout: Bool = true
     ) {
         let visibleFrame = screen.visibleFrame
-        let windows = orderedWindows ?? WindowSnapper.getAllVisibleWindows(onScreen: screen)
+        let discoveredWindows = orderedWindows ?? WindowSnapper.getAllVisibleWindows(onScreen: screen)
+        let windows = stableWindowOrder(discoveredWindows)
+        let windowSummary = windows.enumerated()
+            .map { index, win in "\(index + 1). \(WindowSnapper.debugDescription(for: win.window, appName: win.appName))" }
+            .joined(separator: " | ")
+        debugLog("ARRANGE_WINDOWS: count=\(windows.count) \(windowSummary)")
 
         let layout: GridLayout
         let arrangedWindows: [(window: AXUIElement, appName: String)]
@@ -715,6 +720,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             arrangedWindows = windows
         }
         let zones = layout.zoneRects(in: visibleFrame)
+        let zoneSummary = zones.enumerated()
+            .map { index, zone in
+                "\(index + 1). x=\(Int(zone.rect.minX)) y=\(Int(zone.rect.minY)) w=\(Int(zone.rect.width)) h=\(Int(zone.rect.height))"
+            }
+            .joined(separator: " | ")
+        debugLog("ARRANGE_ZONES: screen=x=\(Int(visibleFrame.minX)) y=\(Int(visibleFrame.minY)) w=\(Int(visibleFrame.width)) h=\(Int(visibleFrame.height)) layout=\"\(layout.name)\" \(zoneSummary)")
 
         guard !arrangedWindows.isEmpty && !zones.isEmpty else { return }
 
@@ -728,6 +739,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             : (ConfigStore.shared.liveAdaptiveGridEnabled ? "live adaptive" : "manual")
         debugLog("ARRANGE: \(mode) layout=\"\(layout.name)\" windows=\(windows.count) offset=\(windowOffset) kept=\(result.kept) arranged=\(result.arranged) minimized=\(result.minimized)")
         NSLog("WindowGrid: \(mode) arrange kept \(result.kept), arranged \(result.arranged), minimized \(result.minimized)")
+    }
+
+    private func stableWindowOrder(
+        _ windows: [(window: AXUIElement, appName: String)]
+    ) -> [(window: AXUIElement, appName: String)] {
+        windows.sorted { lhs, rhs in
+            guard let lhsRect = WindowSnapper.getWindowRect(lhs.window) else { return false }
+            guard let rhsRect = WindowSnapper.getWindowRect(rhs.window) else { return true }
+
+            let rowTolerance = max(80, min(lhsRect.height, rhsRect.height) * 0.35)
+            if abs(lhsRect.midY - rhsRect.midY) > rowTolerance {
+                return lhsRect.midY > rhsRect.midY
+            }
+            if abs(lhsRect.midX - rhsRect.midX) > 12 {
+                return lhsRect.midX < rhsRect.midX
+            }
+            return lhs.appName.localizedStandardCompare(rhs.appName) == .orderedAscending
+        }
     }
 
     private func arrangeAfterNewBrowserWindow(

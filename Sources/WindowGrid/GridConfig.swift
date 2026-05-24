@@ -187,7 +187,6 @@ struct GridLayout: Codable, Equatable {
                     ]
                 ),
                 GridLayout(name: "Adaptive 3 (3-Column)", rows: 1, cols: 3),
-                GridLayout(name: "Adaptive 3 (3-Row)", rows: 3, cols: 1),
             ]
         case 4:
             return [
@@ -213,7 +212,6 @@ struct GridLayout: Codable, Equatable {
         case 6:
             return [
                 sixGrid,
-                GridLayout(name: "Adaptive 6 (2×3)", rows: 3, cols: 2),
             ]
         case 7:
             return [
@@ -241,7 +239,6 @@ struct GridLayout: Codable, Equatable {
         case 8:
             return [
                 GridLayout(name: "Adaptive 8 (4×2)", rows: 2, cols: 4),
-                GridLayout(name: "Adaptive 8 (2×4)", rows: 4, cols: 2),
             ]
         case 9:
             return [nineGrid]
@@ -250,7 +247,6 @@ struct GridLayout: Codable, Equatable {
             let rows = Int(ceil(Double(windowCount) / Double(cols)))
             return [
                 GridLayout(name: "Adaptive \(windowCount) (\(cols)×\(rows))", rows: rows, cols: cols),
-                GridLayout(name: "Adaptive \(windowCount) (\(rows)×\(cols))", rows: cols, cols: rows),
             ]
         }
     }

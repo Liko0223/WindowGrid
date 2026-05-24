@@ -4,6 +4,8 @@ import ApplicationServices
 class WindowSnapper {
     private static var tabbitSnapSerial = 0
     private static var tabbitSnapSequences: [Int: Int] = [:]
+    private static var frameSnapSerial = 0
+    private static var frameSnapSequences: [CFHashCode: Int] = [:]
 
     /// Get the window under the cursor that is being dragged (title bar hit test)
     static func getWindowUnderCursor(at nsPoint: NSPoint? = nil) -> AXUIElement? {
@@ -76,10 +78,23 @@ class WindowSnapper {
             return
         }
 
+        frameSnapSerial += 1
+        let sequence = frameSnapSerial
+        let windowKey = CFHash(window)
+        frameSnapSequences[windowKey] = sequence
+
         // Set position first, then size (some apps need this order)
         applyFrame(window, position: position, size: size, sizeFirst: false)
         // Set position again in case size change shifted it
         applyFrame(window, position: position, size: size, sizeFirst: false)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            guard frameSnapSequences[windowKey] == sequence else { return }
+            applyFrame(window, position: position, size: size, sizeFirst: false)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+            guard frameSnapSequences[windowKey] == sequence else { return }
+            applyFrame(window, position: position, size: size, sizeFirst: false)
+        }
     }
 
     private static func snapTabbitWindow(_ window: AXUIElement, position: CGPoint, size: CGSize) -> Bool {
@@ -212,6 +227,51 @@ class WindowSnapper {
         return position
     }
 
+    private static func getAXFrameInTopLeftCoordinates(_ window: AXUIElement) -> CGRect? {
+        var posRef: AnyObject?
+        var sizeRef: AnyObject?
+        AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &posRef)
+        AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeRef)
+        guard let posRef = posRef, let sizeRef = sizeRef else { return nil }
+
+        var pos = CGPoint.zero
+        var size = CGSize.zero
+        AXValueGetValue(posRef as! AXValue, .cgPoint, &pos)
+        AXValueGetValue(sizeRef as! AXValue, .cgSize, &size)
+        return CGRect(origin: pos, size: size)
+    }
+
+    private static func screenContainsWindow(_ bounds: CGRect, screenRect: CGRect) -> Bool {
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        if screenRect.contains(center) { return true }
+
+        let intersection = bounds.intersection(screenRect)
+        guard !intersection.isNull, bounds.width > 0, bounds.height > 0 else { return false }
+        let overlapArea = intersection.width * intersection.height
+        let windowArea = bounds.width * bounds.height
+        return overlapArea / windowArea > 0.35
+    }
+
+    private static func matchScore(cgBounds: CGRect, axFrame: CGRect) -> CGFloat? {
+        let originDelta = abs(cgBounds.minX - axFrame.minX) + abs(cgBounds.minY - axFrame.minY)
+        let sizeDelta = abs(cgBounds.width - axFrame.width) + abs(cgBounds.height - axFrame.height)
+
+        if originDelta < 12 && sizeDelta < 24 {
+            return originDelta + sizeDelta
+        }
+
+        let intersection = cgBounds.intersection(axFrame)
+        guard !intersection.isNull else { return nil }
+
+        let intersectionArea = intersection.width * intersection.height
+        let cgArea = max(1, cgBounds.width * cgBounds.height)
+        let axArea = max(1, axFrame.width * axFrame.height)
+        let overlap = intersectionArea / min(cgArea, axArea)
+        guard overlap > 0.82 else { return nil }
+
+        return originDelta + sizeDelta + ((1 - overlap) * 100)
+    }
+
     /// Get all visible windows in most-recently-used order (front to back).
     /// If `onScreen` is provided, only returns windows whose center is on that screen.
     static func getAllVisibleWindows(onScreen screen: NSScreen? = nil) -> [(window: AXUIElement, appName: String)] {
@@ -231,6 +291,7 @@ class WindowSnapper {
 
         var result: [(window: AXUIElement, appName: String)] = []
         var seenPids: [Int32: [AXUIElement]] = [:]
+        var usedWindowIndices: [Int32: Set<Int>] = [:]
 
         for info in windowInfoList {
             guard let boundsDict = info[kCGWindowBounds as String] as? [String: CGFloat],
@@ -252,8 +313,7 @@ class WindowSnapper {
 
             // Filter by screen: check if window center is on the target screen
             if let screenRect = screenCGRect {
-                let center = CGPoint(x: bounds.midX, y: bounds.midY)
-                if !screenRect.contains(center) { continue }
+                if !screenContainsWindow(bounds, screenRect: screenRect) { continue }
             }
 
             // Skip tiny windows (toolbars, popups, etc.)
@@ -273,38 +333,24 @@ class WindowSnapper {
 
             guard let axWindows = seenPids[pid] else { continue }
 
-            // Match CG window to AX window by position
-            for axWindow in axWindows {
+            // Match each CG window to one AX window. Consuming by AX index avoids
+            // dropping two real windows that happen to share the same top-left point.
+            var bestMatch: (index: Int, window: AXUIElement, score: CGFloat)?
+            for (index, axWindow) in axWindows.enumerated() {
+                if usedWindowIndices[pid, default: []].contains(index) { continue }
                 guard isManageableWindow(axWindow) else { continue }
+                guard let axFrame = getAXFrameInTopLeftCoordinates(axWindow),
+                      let score = matchScore(cgBounds: bounds, axFrame: axFrame)
+                else { continue }
 
-                var posRef: AnyObject?
-                AXUIElementCopyAttributeValue(axWindow, kAXPositionAttribute as CFString, &posRef)
-                guard let posRef = posRef else { continue }
-
-                var pos = CGPoint.zero
-                AXValueGetValue(posRef as! AXValue, .cgPoint, &pos)
-
-                if abs(pos.x - bounds.origin.x) < 5 && abs(pos.y - bounds.origin.y) < 5 {
-                    // Check not already minimized
-                    var minimizedRef: AnyObject?
-                    AXUIElementCopyAttributeValue(axWindow, kAXMinimizedAttribute as CFString, &minimizedRef)
-                    if let minimized = minimizedRef as? Bool, minimized { continue }
-
-                    // Avoid duplicates
-                    let isDuplicate = result.contains { existing in
-                        var existingPos: AnyObject?
-                        AXUIElementCopyAttributeValue(existing.window, kAXPositionAttribute as CFString, &existingPos)
-                        guard let ep = existingPos else { return false }
-                        var ePoint = CGPoint.zero
-                        AXValueGetValue(ep as! AXValue, .cgPoint, &ePoint)
-                        return abs(ePoint.x - pos.x) < 3 && abs(ePoint.y - pos.y) < 3
-                    }
-                    if !isDuplicate {
-                        result.append((window: axWindow, appName: ownerName))
-                    }
-                    break
+                if bestMatch == nil || score < bestMatch!.score {
+                    bestMatch = (index, axWindow, score)
                 }
             }
+
+            guard let bestMatch else { continue }
+            usedWindowIndices[pid, default: []].insert(bestMatch.index)
+            result.append((window: bestMatch.window, appName: ownerName))
         }
         return result
     }
@@ -353,7 +399,10 @@ class WindowSnapper {
 
     /// Check if two AXUIElements refer to the same window
     static func isSameWindow(_ a: AXUIElement, _ b: AXUIElement) -> Bool {
-        // Compare by PID + title + role (most reliable without CFEqual)
+        if CFEqual(a, b) {
+            return true
+        }
+
         var pidA: pid_t = 0, pidB: pid_t = 0
         AXUIElementGetPid(a, &pidA)
         AXUIElementGetPid(b, &pidB)
@@ -364,7 +413,22 @@ class WindowSnapper {
         AXUIElementCopyAttributeValue(b, kAXTitleAttribute as CFString, &titleB)
         let tA = titleA as? String ?? ""
         let tB = titleB as? String ?? ""
-        return tA == tB
+        guard tA == tB else { return false }
+
+        guard let frameA = getAXFrameInTopLeftCoordinates(a),
+              let frameB = getAXFrameInTopLeftCoordinates(b)
+        else { return false }
+        return matchScore(cgBounds: frameA, axFrame: frameB) != nil
+    }
+
+    static func debugDescription(for window: AXUIElement, appName: String) -> String {
+        var titleRef: AnyObject?
+        AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef)
+        let title = titleRef as? String ?? ""
+        let rect = getWindowRect(window).map {
+            "x=\(Int($0.minX)) y=\(Int($0.minY)) w=\(Int($0.width)) h=\(Int($0.height))"
+        } ?? "rect=?"
+        return title.isEmpty ? "\(appName) [\(rect)]" : "\(appName) \"\(title)\" [\(rect)]"
     }
 
     /// Find the window occupying a given zone rect on screen (excluding a specific window)
