@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="WindowGrid 是开源 macOS 窗口管理工具。按住修饰键拖拽窗口，松手即可吸附到网格布局。">
+    <meta name="description" content="WindowGrid 是开源 macOS 窗口管理工具。用快捷键自动排列窗口、快速打开浏览器并自适应放入当前桌面网格。">
     <meta name="theme-color" content="#f7f5ee">
     <title>WindowGrid - macOS 窗口网格管理工具</title>
     <link rel="icon" href="/assets/windowgrid-icon.png">
@@ -28,7 +28,7 @@
         <div class="hero-copy">
           <p class="eyebrow">Open-source macOS window management</p>
           <h1 id="hero-title">WindowGrid</h1>
-          <p class="hero-lede">按住修饰键拖拽任意窗口，松手即吸附到网格区域。给 macOS 桌面一个轻量、可记忆、适合超宽屏的窗口秩序。</p>
+          <p class="hero-lede">让散落的窗口回到自己的位置。每一个 macOS 桌面都可以有清晰的呼吸、稳定的节奏，以及适合超宽屏展开的安静秩序。</p>
           <div class="hero-actions" aria-label="下载和源码">
             <a class="button primary" href="https://github.com/Liko0223/WindowGrid/releases/latest/download/WindowGrid-macOS.dmg" rel="noreferrer">下载 DMG</a>
             <a class="button secondary" href="https://github.com/Liko0223/WindowGrid/releases" rel="noreferrer">查看 Releases</a>
@@ -58,40 +58,110 @@
           </div>
           <div class="modifier-strip">
             <img src="/assets/windowgrid-icon.png" alt="" width="52" height="52">
-            <span>Control + Drag</span>
+            <span>Control + Command + A</span>
           </div>
         </div>
       </section>
 
       <section class="feature-band" id="features" aria-labelledby="features-title">
         <div class="section-heading">
-          <p class="eyebrow">必要功能，不打扰</p>
-          <h2 id="features-title">把窗口放到该在的位置</h2>
+          <p class="eyebrow">核心工作流</p>
+          <h2 id="features-title">从打开窗口到排好桌面，都更快一步</h2>
         </div>
         <div class="feature-grid">
-          <article class="feature-card">
-            <h3>拖拽吸附</h3>
-            <p>按住 Control、Command、Shift 或 Option 拖动窗口，网格覆盖层会显示目标区域。</p>
+          <article class="feature-card feature-card-large">
+            <div class="feature-copy">
+              <p class="feature-kicker">Control + Command + A</p>
+              <h3>快捷键自动布局</h3>
+              <p>不用逐个拖窗口。按下快捷键后，当前桌面的可见窗口会自动填入网格；连续按下 Control + Command + A，还会在同一窗口数量下轮换候选布局，直到桌面排到顺手为止。</p>
+            </div>
+            <div class="feature-demo demo-arrange" aria-hidden="true">
+              <span class="demo-grid-cell active"></span>
+              <span class="demo-grid-cell"></span>
+              <span class="demo-grid-cell"></span>
+              <span class="demo-grid-cell"></span>
+              <span class="demo-window demo-window-a"></span>
+              <span class="demo-window demo-window-b"></span>
+              <span class="demo-window demo-window-c"></span>
+            </div>
+          </article>
+          <article class="feature-card feature-card-large">
+            <div class="feature-copy">
+              <p class="feature-kicker">Control + Option + N</p>
+              <h3>快速打开浏览器并摆好位置</h3>
+              <p>为当前独立桌面快速新建一个浏览器窗口。WindowGrid 会等浏览器窗口出现后，把它和现有窗口一起重新排列，让每个工作桌面都有自己的浏览器入口。</p>
+            </div>
+            <div class="feature-demo demo-browser" aria-hidden="true">
+              <span class="demo-shortcut">⌥N</span>
+              <span class="demo-browser-window">
+                <i></i><i></i><i></i>
+              </span>
+              <span class="demo-browser-slot"></span>
+              <span class="demo-browser-pane"></span>
+            </div>
           </article>
           <article class="feature-card">
-            <h3>按桌面记忆布局</h3>
-            <p>同一显示器的不同 macOS 桌面/Space 可以保留不同版式，不用反复切换。</p>
+            <div class="feature-demo demo-drag" aria-hidden="true">
+              <span class="demo-grid-cell active"></span>
+              <span class="demo-grid-cell"></span>
+              <span class="demo-grid-cell"></span>
+              <span class="demo-grid-cell"></span>
+              <span class="demo-drag-window"></span>
+              <span class="demo-cursor"></span>
+            </div>
+            <div class="feature-copy">
+              <h3>拖拽吸附</h3>
+              <p>按住 Control、Command、Shift 或 Option 拖动窗口，网格覆盖层会显示目标区域。</p>
+            </div>
           </article>
           <article class="feature-card">
-            <h3>九种预设布局</h3>
-            <p>6 格、9 格、三列、双列、宽屏上下布局，以及适合超宽屏的组合布局。</p>
+            <div class="feature-demo demo-memory" aria-hidden="true">
+              <span class="demo-space-pill">Desktop 1</span>
+              <span class="demo-space-pill alt">Desktop 2</span>
+              <span class="demo-memory-block one"></span>
+              <span class="demo-memory-block two"></span>
+              <span class="demo-memory-block three"></span>
+            </div>
+            <div class="feature-copy">
+              <h3>按桌面记忆布局</h3>
+              <p>同一显示器的不同 macOS 桌面/Space 可以保留不同版式，不用反复切换。</p>
+            </div>
+          </article>
+          <article class="feature-card feature-card-presets">
+            <div class="feature-demo demo-presets" aria-hidden="true">
+              <span class="preset-tile preset-one"></span>
+              <span class="preset-tile preset-two"></span>
+              <span class="preset-tile preset-three"></span>
+              <span class="preset-tile preset-four"></span>
+            </div>
+            <div class="feature-copy">
+              <h3>九种预设布局</h3>
+              <p>6 格、9 格、三列、双列、宽屏上下布局，以及适合超宽屏的组合布局。</p>
+            </div>
           </article>
           <article class="feature-card">
-            <h3>自定义网格</h3>
-            <p>调整行列数、合并格子，创建适合你工作流的窗口版式。</p>
+            <div class="feature-demo demo-custom" aria-hidden="true">
+              <span class="custom-cell wide"></span>
+              <span class="custom-cell"></span>
+              <span class="custom-cell"></span>
+              <span class="custom-cell tall"></span>
+            </div>
+            <div class="feature-copy">
+              <h3>自定义网格</h3>
+              <p>调整行列数、合并格子，创建适合你工作流的窗口版式。</p>
+            </div>
           </article>
           <article class="feature-card">
-            <h3>一键排列</h3>
-            <p>把当前桌面的可见窗口自动填入网格，多余窗口自动最小化。</p>
-          </article>
-          <article class="feature-card">
-            <h3>场景记忆</h3>
-            <p>保存和恢复命名窗口场景，并可记住浏览器标签页 URL。</p>
+            <div class="feature-demo demo-scenes" aria-hidden="true">
+              <span class="scene-row active">Coding</span>
+              <span class="scene-row">Design</span>
+              <span class="scene-mini-window one"></span>
+              <span class="scene-mini-window two"></span>
+            </div>
+            <div class="feature-copy">
+              <h3>场景记忆</h3>
+              <p>保存和恢复命名窗口场景，并可记住浏览器标签页 URL。</p>
+            </div>
           </article>
         </div>
       </section>
