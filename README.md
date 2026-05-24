@@ -107,13 +107,25 @@ make build      # Debug build
 make release    # Release build
 make app        # Package as .app
 make install    # Install to /Applications
-make dmg        # Create dist/WindowGrid-macOS.dmg
-make notarize NOTARY_PROFILE=windowgrid-notary  # Notarize and staple the DMG
+make dev-dmg    # Create a local/dev signed dist/WindowGrid-macOS.dmg
+make dmg        # Create a Developer ID signed dist/WindowGrid-macOS.dmg
+make release-dmg NOTARY_PROFILE=windowgrid-notary  # Sign, notarize, staple, and verify the DMG
 make run        # Build and run (debug)
 make clean      # Clean build artifacts
 ```
 
-For public downloads outside the Mac App Store, install a **Developer ID Application** certificate and notarize the DMG before publishing it on GitHub Releases or your website.
+For public downloads outside the Mac App Store, install a **Developer ID Application** certificate and create a notarytool keychain profile before publishing:
+
+```bash
+xcrun notarytool store-credentials windowgrid-notary \
+  --apple-id you@example.com \
+  --team-id TEAMID \
+  --password app-specific-password
+
+make release-dmg NOTARY_PROFILE=windowgrid-notary
+```
+
+`make dmg` intentionally fails when no Developer ID Application certificate is installed, so release builds do not silently fall back to Apple Development or ad-hoc signatures.
 
 ## License
 
