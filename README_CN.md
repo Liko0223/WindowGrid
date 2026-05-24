@@ -111,6 +111,7 @@ make app        # 打包为 .app
 make install    # 安装到 /Applications
 make dev-dmg    # 创建本地/开发签名的 dist/WindowGrid-macOS.dmg
 make dmg        # 创建 Developer ID 签名的 dist/WindowGrid-macOS.dmg
+make release-check NOTARY_PROFILE=windowgrid-notary  # 检查 Developer ID 和公证前置条件
 make release-dmg NOTARY_PROFILE=windowgrid-notary  # 签名、公证、装订并验证 DMG
 make run        # 构建并运行（调试模式）
 make clean      # 清理构建产物

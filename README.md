@@ -109,6 +109,7 @@ make app        # Package as .app
 make install    # Install to /Applications
 make dev-dmg    # Create a local/dev signed dist/WindowGrid-macOS.dmg
 make dmg        # Create a Developer ID signed dist/WindowGrid-macOS.dmg
+make release-check NOTARY_PROFILE=windowgrid-notary  # Check Developer ID and notarization prerequisites
 make release-dmg NOTARY_PROFILE=windowgrid-notary  # Sign, notarize, staple, and verify the DMG
 make run        # Build and run (debug)
 make clean      # Clean build artifacts

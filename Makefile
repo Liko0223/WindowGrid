@@ -13,7 +13,7 @@ DISTRIBUTION_SIGN_IDENTITY ?= $(DEVELOPER_ID_IDENTITY)
 REQUIRE_CODE_SIGN ?= 0
 NOTARY_PROFILE ?=
 
-.PHONY: build release app install dev-dmg dmg notarize release-dmg verify-dmg relaunch clean run
+.PHONY: build release app install dev-dmg dmg notarize release-dmg release-check verify-dmg relaunch clean run
 
 build:
 	swift build
@@ -86,6 +86,27 @@ notarize: dmg
 	@echo "$(DMG_PATH) notarized successfully."
 
 release-dmg: notarize
+
+release-check:
+	@echo "Checking release signing prerequisites..."
+	@if [ -z "$(DISTRIBUTION_SIGN_IDENTITY)" ]; then \
+		echo "✗ Missing Developer ID Application signing identity."; \
+		echo "  Install it from Xcode: Settings > Accounts > Manage Certificates > + > Developer ID Application"; \
+		exit 1; \
+	else \
+		echo "✓ Developer ID identity: $(DISTRIBUTION_SIGN_IDENTITY)"; \
+	fi
+	@if [ -z "$(NOTARY_PROFILE)" ]; then \
+		echo "✗ Missing NOTARY_PROFILE."; \
+		echo "  Example: make release-check NOTARY_PROFILE=windowgrid-notary"; \
+		exit 1; \
+	fi
+	@xcrun notarytool history --keychain-profile "$(NOTARY_PROFILE)" >/dev/null 2>&1 || { \
+		echo "✗ Notary profile '$(NOTARY_PROFILE)' is not available or not valid."; \
+		echo "  Create it with: xcrun notarytool store-credentials $(NOTARY_PROFILE) --apple-id you@example.com --team-id TEAMID --password app-specific-password"; \
+		exit 1; \
+	}
+	@echo "✓ Notary profile: $(NOTARY_PROFILE)"
 
 verify-dmg:
 	@codesign --verify --verbose=2 "$(DMG_PATH)"
