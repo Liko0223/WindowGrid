@@ -23,11 +23,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     private var flagsChangedMonitor: Any?
     private var localFlagsMonitor: Any?
     private var activeSpaceObserver: NSObjectProtocol?
+    private var spacePollingTimer: Timer?
     private var arrangeHotKeyRef: EventHotKeyRef?
     private var newBrowserHotKeyRef: EventHotKeyRef?
     private var hotKeyHandlerRef: EventHandlerRef?
     private var adaptiveArrangeCycleKey: String?
     private var adaptiveArrangeCycleIndex = 0
+    private var lastSeenSpaceKeys: [UInt32: String] = [:]
+    private var desktopToastRefreshGeneration = 0
 
     private let dragThreshold: CGFloat = 8
     private let arrangeHotKeySignature = OSType(0x57475244) // WGRD
@@ -281,6 +284,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             newBrowser.keyEquivalentModifierMask = newBrowserShortcut.menuModifierMask
         }
         menu.addItem(newBrowser)
+
+        let browserAppItem = NSMenuItem(title: "New Browser App", action: nil, keyEquivalent: "")
+        let browserAppMenu = NSMenu()
+        let currentBrowserBundleID = ConfigStore.shared.newBrowserBundleID
+
+        let currentBrowserApp = NSMenuItem(
+            title: "Current: \(BrowserChoice.name(for: currentBrowserBundleID))",
+            action: nil,
+            keyEquivalent: ""
+        )
+        currentBrowserApp.isEnabled = false
+        browserAppMenu.addItem(currentBrowserApp)
+        browserAppMenu.addItem(.separator())
+
+        for browser in BrowserChoice.all {
+            let itemTitle = browser.isInstalled ? browser.name : "\(browser.name) (not installed)"
+            let item = NSMenuItem(title: itemTitle, action: #selector(selectNewBrowserApp(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = browser.bundleID
+            item.isEnabled = browser.isInstalled
+            item.state = browser.bundleID == currentBrowserBundleID ? .on : .off
+            browserAppMenu.addItem(item)
+        }
+
+        browserAppItem.submenu = browserAppMenu
+        menu.addItem(browserAppItem)
 
         let adaptiveArrange = NSMenuItem(
             title: "Adaptive Arrange by Window Count",
@@ -555,6 +584,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         debugLog("NEW_BROWSER_SHORTCUT: changed to \(shortcut.displayName)")
     }
 
+    @objc private func selectNewBrowserApp(_ sender: NSMenuItem) {
+        guard let bundleID = sender.representedObject as? String else { return }
+        ConfigStore.shared.setNewBrowserBundleID(bundleID)
+        rebuildMenu()
+        debugLog("NEW_BROWSER_APP: changed to \(bundleID)")
+    }
+
     @objc private func setCustomNewBrowserShortcut() {
         let captureView = ShortcutCaptureView(frame: NSRect(x: 0, y: 0, width: 320, height: 88))
         let alert = NSAlert()
@@ -590,7 +626,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     @objc private func openNewBrowserWindow() {
         let screen = currentContextScreen()
         let previousWindows = screen.map { WindowSnapper.getAllVisibleWindows(onScreen: $0) } ?? []
-        let opened = WindowSnapper.openNewBrowserWindow()
+        let browserBundleID = ConfigStore.shared.newBrowserBundleID
+        let opened = WindowSnapper.openNewBrowserWindow(preferredBundleID: browserBundleID)
         debugLog("NEW_BROWSER_WINDOW: \(opened ? "opened" : "failed")")
         if opened, let screen {
             arrangeAfterNewBrowserWindow(on: screen, previousWindows: previousWindows)
@@ -598,7 +635,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         if !opened {
             let alert = NSAlert()
             alert.messageText = "Could Not Open Browser"
-            alert.informativeText = "WindowGrid could not find Tabbit or a system default browser."
+            alert.informativeText = "WindowGrid could not find \(BrowserChoice.name(for: browserBundleID)) or a system default browser."
             alert.runModal()
         }
     }
@@ -1112,16 +1149,65 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         ) { [weak self] _ in
             self?.handleActiveSpaceChanged()
         }
+
+        startSpacePolling()
     }
 
     private func removeEventMonitors() {
         [globalMouseDown, globalMouseDragged, globalMouseUp, flagsChangedMonitor, localFlagsMonitor]
             .compactMap { $0 }
             .forEach { NSEvent.removeMonitor($0) }
+        spacePollingTimer?.invalidate()
+        spacePollingTimer = nil
         if let activeSpaceObserver = activeSpaceObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(activeSpaceObserver)
             self.activeSpaceObserver = nil
         }
+    }
+
+    private func startSpacePolling() {
+        syncLastSeenSpaceKeys()
+        let timer = Timer(timeInterval: 0.35, repeats: true) { [weak self] _ in
+            self?.pollActiveSpaces()
+        }
+        spacePollingTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func pollActiveSpaces() {
+        let changedDisplays = detectChangedSpaceDisplayIDs()
+        guard !changedDisplays.isEmpty else { return }
+
+        debugLog("SPACE_POLL: changed displays=\(changedDisplays.map(String.init).joined(separator: ","))")
+        handleActiveSpaceChanged(changedDisplayIDs: Set(changedDisplays))
+    }
+
+    private func syncLastSeenSpaceKeys() {
+        lastSeenSpaceKeys = currentSpaceKeySnapshot()
+    }
+
+    private func currentSpaceKeySnapshot() -> [UInt32: String] {
+        Dictionary(
+            uniqueKeysWithValues: NSScreen.screens.map { screen in
+                let context = LayoutContext.current(for: screen)
+                return (context.displayID, context.key)
+            }
+        )
+    }
+
+    private func detectChangedSpaceDisplayIDs() -> [UInt32] {
+        let nextSpaceKeys = currentSpaceKeySnapshot()
+        var changedDisplays = nextSpaceKeys.compactMap { displayID, key -> UInt32? in
+            guard let previousKey = lastSeenSpaceKeys[displayID] else { return displayID }
+            return previousKey == key ? nil : displayID
+        }
+
+        for displayID in lastSeenSpaceKeys.keys where nextSpaceKeys[displayID] == nil {
+            changedDisplays.append(displayID)
+        }
+
+        lastSeenSpaceKeys = nextSpaceKeys
+        return Array(Set(changedDisplays))
     }
 
     // MARK: - Event Handlers
@@ -1281,19 +1367,41 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         hideOverlays()
     }
 
-    private func handleActiveSpaceChanged() {
+    private func handleActiveSpaceChanged(changedDisplayIDs providedDisplayIDs: Set<UInt32>? = nil) {
         debugLog("SPACE: active space changed")
+        let inferredDisplayIDs = providedDisplayIDs ?? Set(detectChangedSpaceDisplayIDs())
+        let targetDisplayIDs = inferredDisplayIDs.isEmpty ? currentContextDisplayIDs() : inferredDisplayIDs
         updateStatusBarTitle()
         rebuildMenu()
         refreshOverlayLayouts()
-        showDesktopToast()
+        refreshDesktopToastAfterSpaceChange(displayIDs: targetDisplayIDs)
         if let screen = currentContextScreen(), layoutPanel?.isVisible == true {
             layoutPanelContextScreen = screen
             layoutPanel?.setCurrentLayout(ConfigStore.shared.layout(for: screen))
         }
     }
 
-    private func showDesktopToast() {
+    private func currentContextDisplayIDs() -> Set<UInt32> {
+        guard let screen = currentContextScreen() else {
+            return Set(NSScreen.screens.map { LayoutContext.displayID(for: $0) })
+        }
+        return [LayoutContext.displayID(for: screen)]
+    }
+
+    private func refreshDesktopToastAfterSpaceChange(displayIDs: Set<UInt32>) {
+        desktopToastRefreshGeneration += 1
+        let generation = desktopToastRefreshGeneration
+        showDesktopToast(displayIDs: displayIDs)
+
+        for delay in [0.12, 0.28] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.desktopToastRefreshGeneration == generation else { return }
+                self.showDesktopToast(displayIDs: displayIDs)
+            }
+        }
+    }
+
+    private func showDesktopToast(displayIDs targetDisplayIDs: Set<UInt32>? = nil) {
         let activeDisplayIDs = Set(NSScreen.screens.map { LayoutContext.displayID(for: $0) })
         let staleDisplayIDs = desktopToastWindows.keys.filter { !activeDisplayIDs.contains($0) }
         for displayID in staleDisplayIDs {
@@ -1303,11 +1411,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
         for screen in NSScreen.screens {
             let displayID = LayoutContext.displayID(for: screen)
-            let toast = desktopToastWindow(for: screen)
-            guard !shouldSuppressDesktopToast(on: screen) else {
-                toast.hide()
+            if let targetDisplayIDs, !targetDisplayIDs.contains(displayID) {
                 continue
             }
+            let toast = desktopToastWindow(for: screen)
 
             let rawSpaces = LayoutContext.spaces(on: screen)
             let effectiveCurrentSpaceID = effectiveCurrentSpaceID(in: rawSpaces)
@@ -1326,24 +1433,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
     private func effectiveCurrentSpaceID(in spaces: [DesktopSpace]) -> Int? {
         return spaces.first(where: \.isCurrent)?.spaceID
-    }
-
-    private func shouldSuppressDesktopToast(on screen: NSScreen) -> Bool {
-        let windows = WindowSnapper.getAllVisibleWindows(onScreen: screen)
-        guard windows.count == 1,
-              let rect = WindowSnapper.getWindowRect(windows[0].window)
-        else { return false }
-
-        let screenFrame = screen.frame
-        let visibleFrame = screen.visibleFrame
-        let screenArea = max(1, screenFrame.width * screenFrame.height)
-        let visibleArea = max(1, visibleFrame.width * visibleFrame.height)
-        let overlapWithScreen = rect.intersection(screenFrame)
-        let overlapWithVisible = rect.intersection(visibleFrame)
-        let screenCoverage = overlapWithScreen.width * overlapWithScreen.height / screenArea
-        let visibleCoverage = overlapWithVisible.width * overlapWithVisible.height / visibleArea
-
-        return screenCoverage > 0.9 || visibleCoverage > 0.94
     }
 
     // MARK: - Overlay Management
@@ -1385,18 +1474,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
 extension AppDelegate: DesktopToastWindowDelegate {
     func desktopToastWindowDidMove(_ window: DesktopToastWindow) {
-        if let screen = window.screen {
+        if let screen = screen(for: window) {
             ConfigStore.shared.setToastPosition(window.frame.origin, for: screen)
         }
     }
 
     func desktopToastWindow(_ window: DesktopToastWindow, didCommitDesktopName name: String) {
-        guard let screen = window.screen else { return }
+        guard let screen = screen(for: window) else { return }
         ConfigStore.shared.setDesktopName(name, for: screen)
         updateStatusBarTitle()
         rebuildMenu()
         showDesktopToast()
         debugLog("DESKTOP_NAME_INLINE: \(name)")
+    }
+
+    private func screen(for window: DesktopToastWindow) -> NSScreen? {
+        if let targetDisplayID = window.targetDisplayID,
+           let screen = NSScreen.screens.first(where: { LayoutContext.displayID(for: $0) == targetDisplayID }) {
+            return screen
+        }
+        return window.screen
     }
 
     private func displayToastTitle(for screen: NSScreen) -> String {

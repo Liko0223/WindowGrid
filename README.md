@@ -21,6 +21,7 @@
 - **Drag to snap** — Hold your chosen modifier key + drag a window, release to snap it into a grid zone
 - **Configurable drag modifier** — Choose Control, Command, Shift, or Option from the menu bar
 - **Per-desktop layouts** — Set different layouts per display and per macOS desktop/Space
+- **Temporary desktop locks** — Lock a desktop workspace from the toast for 30 minutes, 60 minutes, or 2 hours
 - **Grid overlay** — Semi-transparent grid appears while dragging, highlights the target zone
 - **9 preset layouts** — 6-Grid, 4-Grid, 9-Grid, 3-Column, 2-Column, 1+4 (Tall Left), 4+1 (Tall Right), Wide Top, Wide Bottom
 - **Custom layout editor** — Adjust grid size and merge cells to create your own layouts

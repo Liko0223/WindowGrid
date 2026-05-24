@@ -601,7 +601,7 @@ class WindowSnapper {
         browserBundleIDs.contains(bundleID)
     }
 
-    static func openNewBrowserWindow(preferredBundleID: String = "com.tabbit-ai.Tabbit") -> Bool {
+    static func openNewBrowserWindow(preferredBundleID: String = BrowserChoice.defaultBundleID) -> Bool {
         guard let bundleID = resolveBrowserBundleID(preferredBundleID),
               let appName = appNameForBundleID(bundleID)
         else {
