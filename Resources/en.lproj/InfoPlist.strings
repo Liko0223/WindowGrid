@@ -1,0 +1,2 @@
+"NSAccessibilityUsageDescription" = "WindowGrid needs accessibility access to move and resize windows.";
+"NSAppleEventsUsageDescription" = "WindowGrid needs permission to control System Events so it can switch macOS desktops from the desktop toast.";

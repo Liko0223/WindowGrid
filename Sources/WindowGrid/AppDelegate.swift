@@ -65,8 +65,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         registerArrangeHotKey()
         registerNewBrowserHotKey()
 
-        if !WindowSnapper.checkAccessibility() {
-            showAccessibilityAlert()
+        if !WindowSnapper.isAccessibilityTrusted {
+            _ = WindowSnapper.checkAccessibility()
         }
 
         debugLog("START: accessibility=\(WindowSnapper.isAccessibilityTrusted), modifier=\(activationModifierKey.rawValue)")
@@ -87,11 +87,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
     private func showAccessibilityAlert() {
         let alert = NSAlert()
-        alert.messageText = "WindowGrid Needs Accessibility Access"
-        alert.informativeText = "Grant access in System Settings → Privacy & Security → Accessibility, then relaunch WindowGrid."
+        alert.messageText = L10n.text("WindowGrid Needs Accessibility Access", "WindowGrid 需要辅助功能权限")
+        alert.informativeText = L10n.text(
+            "Grant access in System Settings → Privacy & Security → Accessibility, then relaunch WindowGrid.",
+            "请在系统设置 → 隐私与安全性 → 辅助功能中允许 WindowGrid，然后重新启动。"
+        )
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open Settings")
-        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: L10n.text("Open Settings", "打开系统设置"))
+        alert.addButton(withTitle: L10n.text("Quit", "退出"))
 
         if alert.runModal() == .alertFirstButtonReturn {
             NSWorkspace.shared.open(
@@ -186,13 +189,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         let contextScreen = currentContextScreen()
         let contextLayout = contextScreen.map { effectiveLayout(for: $0) } ?? ConfigStore.shared.activeLayout
         let savedContextLayout = contextScreen.map { ConfigStore.shared.layout(for: $0) } ?? ConfigStore.shared.activeLayout
-        let contextLabel = contextScreen.map { ConfigStore.shared.contextLabel(for: $0) } ?? "Current Desktop"
+        let contextLabel = contextScreen.map { ConfigStore.shared.contextLabel(for: $0) } ?? L10n.text("Current Desktop", "当前桌面")
         let desktopName = contextScreen.flatMap { ConfigStore.shared.desktopName(for: $0) }
 
         updateStatusBarTitle()
 
         let status = NSMenuItem(
-            title: WindowSnapper.isAccessibilityTrusted ? "Accessibility: Granted" : "Accessibility: Missing",
+            title: WindowSnapper.isAccessibilityTrusted
+                ? L10n.text("Accessibility: Granted", "辅助功能：已授权")
+                : L10n.text("Accessibility: Missing", "辅助功能：未授权"),
             action: WindowSnapper.isAccessibilityTrusted ? nil : #selector(requestAccessibilityAccess),
             keyEquivalent: ""
         )
@@ -201,68 +206,45 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         menu.addItem(status)
         menu.addItem(.separator())
 
-        let header = NSMenuItem(title: "This Desktop: \(contextLabel)", action: nil, keyEquivalent: "")
+        let header = NSMenuItem(title: L10n.text("This Desktop: \(contextLabel)", "此桌面：\(contextLabel)"), action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
 
-        let hint = NSMenuItem(title: "Choose a layout below for this desktop only", action: nil, keyEquivalent: "")
-        hint.isEnabled = false
-        menu.addItem(hint)
-
         if ConfigStore.shared.liveAdaptiveGridEnabled {
-            let adaptiveGridItem = NSMenuItem(title: "Current Grid: \(contextLayout.name)", action: nil, keyEquivalent: "")
+            let adaptiveGridItem = NSMenuItem(
+                title: L10n.text("Current Grid: \(L10n.layoutName(contextLayout.name))", "当前网格：\(L10n.layoutName(contextLayout.name))"),
+                action: nil,
+                keyEquivalent: ""
+            )
             adaptiveGridItem.isEnabled = false
             menu.addItem(adaptiveGridItem)
         }
 
         let nameItem = NSMenuItem(
-            title: "Desktop Name: \(desktopName ?? "Not Set")",
+            title: L10n.text(
+                "Desktop Name: \(desktopName ?? "Not Set")",
+                "桌面名称：\(desktopName ?? "未设置")"
+            ),
             action: nil,
             keyEquivalent: ""
         )
         nameItem.isEnabled = false
         menu.addItem(nameItem)
 
-        let setName = NSMenuItem(title: "Name This Desktop…", action: #selector(nameCurrentDesktop), keyEquivalent: "")
+        let setName = NSMenuItem(title: L10n.text("Name This Desktop…", "命名此桌面…"), action: #selector(nameCurrentDesktop), keyEquivalent: "")
         setName.target = self
         menu.addItem(setName)
 
         if desktopName != nil {
-            let clearName = NSMenuItem(title: "Clear Desktop Name", action: #selector(clearCurrentDesktopName), keyEquivalent: "")
+            let clearName = NSMenuItem(title: L10n.text("Clear Desktop Name", "清除桌面名称"), action: #selector(clearCurrentDesktopName), keyEquivalent: "")
             clearName.target = self
             menu.addItem(clearName)
         }
 
         menu.addItem(.separator())
 
-        for layout in ConfigStore.shared.allLayouts {
-            let item = NSMenuItem(title: layout.name, action: #selector(switchLayout(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = layout
-            item.state = layout.name == savedContextLayout.name && !ConfigStore.shared.liveAdaptiveGridEnabled ? .on : .off
-            menu.addItem(item)
-        }
-
-        let setDefault = NSMenuItem(
-            title: "Set \"\(savedContextLayout.name)\" as Default",
-            action: #selector(setCurrentLayoutAsDefault),
-            keyEquivalent: ""
-        )
-        setDefault.target = self
-        menu.addItem(setDefault)
-
-        let clearOverride = NSMenuItem(
-            title: "Use Default Layout on This Desktop",
-            action: #selector(clearCurrentLayoutOverride),
-            keyEquivalent: ""
-        )
-        clearOverride.target = self
-        menu.addItem(clearOverride)
-
-        menu.addItem(.separator())
-
         let arrange = NSMenuItem(
-            title: "Arrange All Windows",
+            title: L10n.text("Arrange All Windows", "排列所有窗口"),
             action: #selector(arrangeAllWindows),
             keyEquivalent: ""
         )
@@ -273,8 +255,78 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         }
         menu.addItem(arrange)
 
+        let adaptiveArrange = NSMenuItem(
+            title: L10n.text("Adaptive Arrange by Window Count", "按窗口数量自适应排列"),
+            action: #selector(toggleAdaptiveArrange(_:)),
+            keyEquivalent: ""
+        )
+        adaptiveArrange.target = self
+        adaptiveArrange.state = ConfigStore.shared.adaptiveArrangeEnabled ? .on : .off
+        menu.addItem(adaptiveArrange)
+
+        let liveAdaptiveGrid = NSMenuItem(
+            title: L10n.text("Live Adaptive Grid by Window Count", "拖拽时按窗口数量显示自适应网格"),
+            action: #selector(toggleLiveAdaptiveGrid(_:)),
+            keyEquivalent: ""
+        )
+        liveAdaptiveGrid.target = self
+        liveAdaptiveGrid.state = ConfigStore.shared.liveAdaptiveGridEnabled ? .on : .off
+        menu.addItem(liveAdaptiveGrid)
+
+        menu.addItem(.separator())
+
+        let manualLayoutItem = NSMenuItem(title: L10n.text("Manual Layouts", "手动布局"), action: nil, keyEquivalent: "")
+        let manualLayoutMenu = NSMenu()
+
+        let manualHint = NSMenuItem(
+            title: L10n.text("Saved for this desktop only", "只保存到当前桌面"),
+            action: nil,
+            keyEquivalent: ""
+        )
+        manualHint.isEnabled = false
+        manualLayoutMenu.addItem(manualHint)
+        manualLayoutMenu.addItem(.separator())
+
+        for layout in ConfigStore.shared.allLayouts {
+            let item = NSMenuItem(title: L10n.layoutName(layout.name), action: #selector(switchLayout(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = layout
+            item.state = layout.name == savedContextLayout.name && !ConfigStore.shared.liveAdaptiveGridEnabled ? .on : .off
+            manualLayoutMenu.addItem(item)
+        }
+
+        manualLayoutMenu.addItem(.separator())
+
+        let setDefault = NSMenuItem(
+            title: L10n.text(
+                "Set \"\(L10n.layoutName(savedContextLayout.name))\" as Default",
+                "将“\(L10n.layoutName(savedContextLayout.name))”设为默认"
+            ),
+            action: #selector(setCurrentLayoutAsDefault),
+            keyEquivalent: ""
+        )
+        setDefault.target = self
+        manualLayoutMenu.addItem(setDefault)
+
+        let clearOverride = NSMenuItem(
+            title: L10n.text("Use Default Layout on This Desktop", "此桌面使用默认布局"),
+            action: #selector(clearCurrentLayoutOverride),
+            keyEquivalent: ""
+        )
+        clearOverride.target = self
+        manualLayoutMenu.addItem(clearOverride)
+
+        manualLayoutMenu.addItem(.separator())
+
+        let editLayout = NSMenuItem(title: L10n.text("Edit Layouts…", "编辑布局…"), action: #selector(openLayoutPanel), keyEquivalent: "l")
+        editLayout.target = self
+        manualLayoutMenu.addItem(editLayout)
+
+        manualLayoutItem.submenu = manualLayoutMenu
+        menu.addItem(manualLayoutItem)
+
         let newBrowser = NSMenuItem(
-            title: "New Browser Window",
+            title: L10n.text("New Browser Window", "新建浏览器窗口"),
             action: #selector(openNewBrowserWindow),
             keyEquivalent: ""
         )
@@ -285,12 +337,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         }
         menu.addItem(newBrowser)
 
-        let browserAppItem = NSMenuItem(title: "New Browser App", action: nil, keyEquivalent: "")
+        let settingsItem = NSMenuItem(title: L10n.text("Settings", "设置"), action: nil, keyEquivalent: "")
+        let settingsMenu = NSMenu()
+
+        let browserAppItem = NSMenuItem(title: L10n.text("New Browser App", "新建浏览器应用"), action: nil, keyEquivalent: "")
         let browserAppMenu = NSMenu()
         let currentBrowserBundleID = ConfigStore.shared.newBrowserBundleID
 
         let currentBrowserApp = NSMenuItem(
-            title: "Current: \(BrowserChoice.name(for: currentBrowserBundleID))",
+            title: L10n.current(BrowserChoice.name(for: currentBrowserBundleID)),
             action: nil,
             keyEquivalent: ""
         )
@@ -299,7 +354,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         browserAppMenu.addItem(.separator())
 
         for browser in BrowserChoice.all {
-            let itemTitle = browser.isInstalled ? browser.name : "\(browser.name) (not installed)"
+            let itemTitle = browser.isInstalled ? browser.name : L10n.notInstalled(browser.name)
             let item = NSMenuItem(title: itemTitle, action: #selector(selectNewBrowserApp(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = browser.bundleID
@@ -309,32 +364,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         }
 
         browserAppItem.submenu = browserAppMenu
-        menu.addItem(browserAppItem)
+        settingsMenu.addItem(browserAppItem)
+        settingsMenu.addItem(.separator())
 
-        let adaptiveArrange = NSMenuItem(
-            title: "Adaptive Arrange by Window Count",
-            action: #selector(toggleAdaptiveArrange(_:)),
-            keyEquivalent: ""
-        )
-        adaptiveArrange.target = self
-        adaptiveArrange.state = ConfigStore.shared.adaptiveArrangeEnabled ? .on : .off
-        menu.addItem(adaptiveArrange)
-
-        let liveAdaptiveGrid = NSMenuItem(
-            title: "Live Adaptive Grid by Window Count",
-            action: #selector(toggleLiveAdaptiveGrid(_:)),
-            keyEquivalent: ""
-        )
-        liveAdaptiveGrid.target = self
-        liveAdaptiveGrid.state = ConfigStore.shared.liveAdaptiveGridEnabled ? .on : .off
-        menu.addItem(liveAdaptiveGrid)
-
-        let shortcutItem = NSMenuItem(title: "Arrange Shortcut", action: nil, keyEquivalent: "")
+        let shortcutItem = NSMenuItem(title: L10n.text("Arrange Shortcut", "排列快捷键"), action: nil, keyEquivalent: "")
         let shortcutMenu = NSMenu()
         let currentShortcut = ConfigStore.shared.arrangeShortcut
 
         let current = NSMenuItem(
-            title: "Current: \(currentShortcut?.displayName ?? "Off")",
+            title: L10n.current(currentShortcut?.displayName ?? L10n.text("Off", "关闭")),
             action: nil,
             keyEquivalent: ""
         )
@@ -351,24 +389,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         }
 
         shortcutMenu.addItem(.separator())
-        let customShortcut = NSMenuItem(title: "Set Custom Shortcut…", action: #selector(setCustomArrangeShortcut), keyEquivalent: "")
+        let customShortcut = NSMenuItem(title: L10n.text("Set Custom Shortcut…", "设置自定义快捷键…"), action: #selector(setCustomArrangeShortcut), keyEquivalent: "")
         customShortcut.target = self
         shortcutMenu.addItem(customShortcut)
 
-        let disableShortcut = NSMenuItem(title: "Disable Shortcut", action: #selector(disableArrangeShortcut), keyEquivalent: "")
+        let disableShortcut = NSMenuItem(title: L10n.text("Disable Shortcut", "关闭快捷键"), action: #selector(disableArrangeShortcut), keyEquivalent: "")
         disableShortcut.target = self
         disableShortcut.state = currentShortcut == nil ? .on : .off
         shortcutMenu.addItem(disableShortcut)
 
         shortcutItem.submenu = shortcutMenu
-        menu.addItem(shortcutItem)
+        settingsMenu.addItem(shortcutItem)
 
-        let browserShortcutItem = NSMenuItem(title: "New Browser Shortcut", action: nil, keyEquivalent: "")
+        let browserShortcutItem = NSMenuItem(title: L10n.text("New Browser Shortcut", "新建浏览器快捷键"), action: nil, keyEquivalent: "")
         let browserShortcutMenu = NSMenu()
         let currentBrowserShortcut = ConfigStore.shared.newBrowserShortcut
 
         let currentBrowser = NSMenuItem(
-            title: "Current: \(currentBrowserShortcut?.displayName ?? "Off")",
+            title: L10n.current(currentBrowserShortcut?.displayName ?? L10n.text("Off", "关闭")),
             action: nil,
             keyEquivalent: ""
         )
@@ -385,32 +423,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         }
 
         browserShortcutMenu.addItem(.separator())
-        let customBrowserShortcut = NSMenuItem(title: "Set Custom Shortcut…", action: #selector(setCustomNewBrowserShortcut), keyEquivalent: "")
+        let customBrowserShortcut = NSMenuItem(title: L10n.text("Set Custom Shortcut…", "设置自定义快捷键…"), action: #selector(setCustomNewBrowserShortcut), keyEquivalent: "")
         customBrowserShortcut.target = self
         browserShortcutMenu.addItem(customBrowserShortcut)
 
-        let disableBrowserShortcut = NSMenuItem(title: "Disable Shortcut", action: #selector(disableNewBrowserShortcut), keyEquivalent: "")
+        let disableBrowserShortcut = NSMenuItem(title: L10n.text("Disable Shortcut", "关闭快捷键"), action: #selector(disableNewBrowserShortcut), keyEquivalent: "")
         disableBrowserShortcut.target = self
         disableBrowserShortcut.state = currentBrowserShortcut == nil ? .on : .off
         browserShortcutMenu.addItem(disableBrowserShortcut)
 
         browserShortcutItem.submenu = browserShortcutMenu
-        menu.addItem(browserShortcutItem)
+        settingsMenu.addItem(browserShortcutItem)
+        settingsMenu.addItem(.separator())
 
-        let preview = NSMenuItem(title: "Preview Grid", action: #selector(previewGrid), keyEquivalent: "p")
+        let preview = NSMenuItem(title: L10n.text("Preview Grid", "预览网格"), action: #selector(previewGrid), keyEquivalent: "p")
         preview.target = self
         menu.addItem(preview)
 
-        let editLayout = NSMenuItem(title: "Edit Layouts…", action: #selector(openLayoutPanel), keyEquivalent: "l")
-        editLayout.target = self
-        menu.addItem(editLayout)
-
-        let modifierItem = NSMenuItem(title: "Drag Modifier", action: nil, keyEquivalent: "")
+        let modifierItem = NSMenuItem(title: L10n.text("Drag Modifier", "拖拽修饰键"), action: nil, keyEquivalent: "")
         let modifierMenu = NSMenu()
         for modifier in ActivationModifierKey.allCases {
             let item = NSMenuItem(
                 title: modifier == .option
-                    ? "\(modifier.symbol) \(modifier.displayName) (may conflict)"
+                    ? "\(modifier.symbol) \(modifier.displayName) \(L10n.text("(may conflict)", "（可能冲突）"))"
                     : "\(modifier.symbol) \(modifier.displayName)",
                 action: #selector(switchActivationModifier(_:)),
                 keyEquivalent: ""
@@ -421,19 +456,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             modifierMenu.addItem(item)
         }
         modifierItem.submenu = modifierMenu
-        menu.addItem(modifierItem)
+        settingsMenu.addItem(modifierItem)
 
-        let openConfig = NSMenuItem(title: "Open Config File…", action: #selector(openConfigFile), keyEquivalent: ",")
+        let openConfig = NSMenuItem(title: L10n.text("Open Config File…", "打开配置文件…"), action: #selector(openConfigFile), keyEquivalent: ",")
         openConfig.target = self
-        menu.addItem(openConfig)
+        settingsMenu.addItem(openConfig)
+
+        let loginItem = NSMenuItem(title: L10n.text("Launch at Login", "登录时打开"), action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
+        loginItem.target = self
+        loginItem.state = LaunchAtLogin.isEnabled ? .on : .off
+        settingsMenu.addItem(loginItem)
+
+        settingsItem.submenu = settingsMenu
+        menu.addItem(settingsItem)
 
         menu.addItem(.separator())
 
         // Scenes submenu
-        let scenesItem = NSMenuItem(title: "Scenes", action: nil, keyEquivalent: "")
+        let scenesItem = NSMenuItem(title: L10n.text("Scenes", "场景"), action: nil, keyEquivalent: "")
         let scenesMenu = NSMenu()
 
-        let saveScene = NSMenuItem(title: "Save Current Scene…", action: #selector(saveCurrentScene), keyEquivalent: "s")
+        let saveScene = NSMenuItem(title: L10n.text("Save Current Scene…", "保存当前场景…"), action: #selector(saveCurrentScene), keyEquivalent: "s")
         saveScene.target = self
         saveScene.keyEquivalentModifierMask = [.command, .shift]
         scenesMenu.addItem(saveScene)
@@ -448,12 +491,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
                 // Add update & delete as submenu
                 let sceneSubMenu = NSMenu()
-                let updateItem = NSMenuItem(title: "Update \"\(scene.name)\"", action: #selector(updateSceneFromMenu(_:)), keyEquivalent: "")
+                let updateItem = NSMenuItem(
+                    title: L10n.text("Update \"\(scene.name)\"", "更新“\(scene.name)”"),
+                    action: #selector(updateSceneFromMenu(_:)),
+                    keyEquivalent: ""
+                )
                 updateItem.target = self
                 updateItem.representedObject = scene.name
                 sceneSubMenu.addItem(updateItem)
                 sceneSubMenu.addItem(.separator())
-                let deleteItem = NSMenuItem(title: "Delete \"\(scene.name)\"", action: #selector(deleteSceneFromMenu(_:)), keyEquivalent: "")
+                let deleteItem = NSMenuItem(
+                    title: L10n.text("Delete \"\(scene.name)\"", "删除“\(scene.name)”"),
+                    action: #selector(deleteSceneFromMenu(_:)),
+                    keyEquivalent: ""
+                )
                 deleteItem.target = self
                 deleteItem.representedObject = scene.name
                 sceneSubMenu.addItem(deleteItem)
@@ -468,16 +519,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
         menu.addItem(.separator())
 
-        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
-        loginItem.target = self
-        loginItem.state = LaunchAtLogin.isEnabled ? .on : .off
-        menu.addItem(loginItem)
-
-        let about = NSMenuItem(title: "About WindowGrid", action: #selector(showAbout), keyEquivalent: "")
+        let about = NSMenuItem(title: L10n.text("About WindowGrid", "关于 WindowGrid"), action: #selector(showAbout), keyEquivalent: "")
         about.target = self
         menu.addItem(about)
 
-        let quit = NSMenuItem(title: "Quit WindowGrid", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: L10n.text("Quit WindowGrid", "退出 WindowGrid"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
 
         statusItem.menu = menu
@@ -502,22 +548,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     }
 
     @objc private func requestAccessibilityAccess() {
-        _ = WindowSnapper.checkAccessibility()
-        showAccessibilityAlert()
+        NSWorkspace.shared.open(
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        )
         rebuildMenu()
     }
 
     @objc private func nameCurrentDesktop() {
         guard let screen = currentContextScreen() else { return }
         let alert = NSAlert()
-        alert.messageText = "Name This Desktop"
-        alert.informativeText = "Give the current desktop a short name, such as Development, Design, or Writing."
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L10n.text("Name This Desktop", "命名此桌面")
+        alert.informativeText = L10n.text(
+            "Give the current desktop a short name, such as Development, Design, or Writing.",
+            "给当前桌面起一个简短名称，比如开发、设计或写作。"
+        )
+        alert.addButton(withTitle: L10n.text("Save", "保存"))
+        alert.addButton(withTitle: L10n.text("Cancel", "取消"))
 
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
         textField.stringValue = ConfigStore.shared.desktopName(for: screen) ?? ""
-        textField.placeholderString = "e.g. Development"
+        textField.placeholderString = L10n.text("e.g. Development", "例如：开发")
         alert.accessoryView = textField
         alert.window.initialFirstResponder = textField
 
@@ -547,19 +597,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     @objc private func setCustomArrangeShortcut() {
         let captureView = ShortcutCaptureView(frame: NSRect(x: 0, y: 0, width: 320, height: 88))
         let alert = NSAlert()
-        alert.messageText = "Set Arrange Shortcut"
-        alert.informativeText = "Click the field, then press a shortcut with at least one modifier."
+        alert.messageText = L10n.text("Set Arrange Shortcut", "设置排列快捷键")
+        alert.informativeText = L10n.text(
+            "Click the field, then press a shortcut with at least one modifier.",
+            "点击输入框，然后按下至少包含一个修饰键的快捷键。"
+        )
         alert.accessoryView = captureView
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L10n.text("Save", "保存"))
+        alert.addButton(withTitle: L10n.text("Cancel", "取消"))
         alert.window.initialFirstResponder = captureView
 
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn, let shortcut = captureView.shortcut else { return }
         guard shortcut.hasUsableModifier else {
             let warning = NSAlert()
-            warning.messageText = "Shortcut needs a modifier"
-            warning.informativeText = "Use Control, Option, Command, or Shift with a key."
+            warning.messageText = L10n.text("Shortcut needs a modifier", "快捷键需要修饰键")
+            warning.informativeText = L10n.text(
+                "Use Control, Option, Command, or Shift with a key.",
+                "请将 Control、Option、Command 或 Shift 与某个按键组合使用。"
+            )
             warning.runModal()
             return
         }
@@ -594,19 +650,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     @objc private func setCustomNewBrowserShortcut() {
         let captureView = ShortcutCaptureView(frame: NSRect(x: 0, y: 0, width: 320, height: 88))
         let alert = NSAlert()
-        alert.messageText = "Set New Browser Shortcut"
-        alert.informativeText = "Click the field, then press a shortcut with at least one modifier."
+        alert.messageText = L10n.text("Set New Browser Shortcut", "设置新建浏览器快捷键")
+        alert.informativeText = L10n.text(
+            "Click the field, then press a shortcut with at least one modifier.",
+            "点击输入框，然后按下至少包含一个修饰键的快捷键。"
+        )
         alert.accessoryView = captureView
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L10n.text("Save", "保存"))
+        alert.addButton(withTitle: L10n.text("Cancel", "取消"))
         alert.window.initialFirstResponder = captureView
 
         let response = alert.runModal()
         guard response == .alertFirstButtonReturn, let shortcut = captureView.shortcut else { return }
         guard shortcut.hasUsableModifier else {
             let warning = NSAlert()
-            warning.messageText = "Shortcut needs a modifier"
-            warning.informativeText = "Use Control, Option, Command, or Shift with a key."
+            warning.messageText = L10n.text("Shortcut needs a modifier", "快捷键需要修饰键")
+            warning.informativeText = L10n.text(
+                "Use Control, Option, Command, or Shift with a key.",
+                "请将 Control、Option、Command 或 Shift 与某个按键组合使用。"
+            )
             warning.runModal()
             return
         }
@@ -634,8 +696,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         }
         if !opened {
             let alert = NSAlert()
-            alert.messageText = "Could Not Open Browser"
-            alert.informativeText = "WindowGrid could not find \(BrowserChoice.name(for: browserBundleID)) or a system default browser."
+            alert.messageText = L10n.text("Could Not Open Browser", "无法打开浏览器")
+            alert.informativeText = L10n.text(
+                "WindowGrid could not find \(BrowserChoice.name(for: browserBundleID)) or a system default browser.",
+                "WindowGrid 找不到 \(BrowserChoice.name(for: browserBundleID)) 或系统默认浏览器。"
+            )
             alert.runModal()
         }
     }
@@ -1040,20 +1105,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         let assignments = WindowSnapper.captureArrangement(layout: layout, onScreen: screen)
         guard !assignments.isEmpty else {
             let alert = NSAlert()
-            alert.messageText = "No windows to save"
-            alert.informativeText = "Arrange some windows in the grid first, then save the scene."
+            alert.messageText = L10n.text("No windows to save", "没有可保存的窗口")
+            alert.informativeText = L10n.text(
+                "Arrange some windows in the grid first, then save the scene.",
+                "请先把一些窗口排列到网格中，然后再保存场景。"
+            )
             alert.runModal()
             return
         }
 
         let alert = NSAlert()
-        alert.messageText = "Save Scene"
-        alert.informativeText = "Name this window arrangement:"
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L10n.text("Save Scene", "保存场景")
+        alert.informativeText = L10n.text("Name this window arrangement:", "给这个窗口排列命名：")
+        alert.addButton(withTitle: L10n.text("Save", "保存"))
+        alert.addButton(withTitle: L10n.text("Cancel", "取消"))
 
         let nameField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        nameField.placeholderString = "e.g. Coding, Design, Writing"
+        nameField.placeholderString = L10n.text("e.g. Coding, Design, Writing", "例如：开发、设计、写作")
         alert.accessoryView = nameField
         alert.window.initialFirstResponder = nameField
 
@@ -1141,7 +1209,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "WindowGrid"
-        alert.informativeText = "Open-source window management for macOS.\n\nHold \(activationModifierKey.displayName) + drag any window to snap it to a grid zone.\n\nVersion 0.1.0"
+        alert.informativeText = L10n.text(
+            "Open-source window management for macOS.\n\nHold \(activationModifierKey.displayName) + drag any window to snap it to a grid zone.\n\nVersion 0.1.0",
+            "开源 macOS 窗口管理工具。\n\n按住 \(activationModifierKey.displayName) 并拖拽任意窗口，即可将它吸附到网格区域。\n\n版本 0.1.0"
+        )
         alert.alertStyle = .informational
         alert.runModal()
     }
@@ -1449,7 +1520,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             let effectiveCurrentSpaceID = effectiveCurrentSpaceID(in: rawSpaces)
             let titleName = ConfigStore.shared.desktopName(for: screen)
             let displayTitle = displayToastTitle(for: screen)
-            let title = titleName?.isEmpty == false ? titleName! : "Desktop"
+            let title = titleName?.isEmpty == false ? titleName! : L10n.text("Desktop", "桌面")
             debugLog("SPACE_TOAST: display=\(displayID) title=\(displayTitle) current=\(effectiveCurrentSpaceID.map(String.init) ?? "nil")")
             toast.show(
                 title: title,
@@ -1527,7 +1598,7 @@ extension AppDelegate: DesktopToastWindowDelegate {
 
     private func displayToastTitle(for screen: NSScreen) -> String {
         let index = NSScreen.screens.firstIndex(of: screen).map { $0 + 1 } ?? 1
-        return "Display \(index)"
+        return L10n.text("Display \(index)", "显示器 \(index)")
     }
 
 }

@@ -2,8 +2,8 @@ import AppKit
 import Carbon.HIToolbox
 
 final class ShortcutCaptureView: NSView {
-    private let promptLabel = NSTextField(labelWithString: "Press shortcut")
-    private let shortcutLabel = NSTextField(labelWithString: "Click here, then press keys")
+    private let promptLabel = NSTextField(labelWithString: L10n.text("Press shortcut", "按下快捷键"))
+    private let shortcutLabel = NSTextField(labelWithString: L10n.text("Click here, then press keys", "点击这里，然后按键"))
 
     private(set) var shortcut: KeyboardShortcut?
 

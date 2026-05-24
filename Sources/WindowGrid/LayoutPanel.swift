@@ -24,7 +24,7 @@ class LayoutPanel: NSWindow {
             defer: false
         )
 
-        self.title = "Grid Layout"
+        self.title = L10n.text("Grid Layout", "网格布局")
         self.center()
         self.isReleasedWhenClosed = false
         self.level = .floating
@@ -38,7 +38,12 @@ class LayoutPanel: NSWindow {
         self.contentView = container
 
         // Segment control: Presets | Custom
-        segmentControl = NSSegmentedControl(labels: ["Presets", "Custom"], trackingMode: .selectOne, target: self, action: #selector(segmentChanged(_:)))
+        segmentControl = NSSegmentedControl(
+            labels: [L10n.text("Presets", "预设"), L10n.text("Custom", "自定义")],
+            trackingMode: .selectOne,
+            target: self,
+            action: #selector(segmentChanged(_:))
+        )
         segmentControl.selectedSegment = 0
         segmentControl.frame = NSRect(x: 20, y: container.bounds.height - 50, width: 200, height: 30)
         segmentControl.autoresizingMask = [.minYMargin]
@@ -221,7 +226,7 @@ class PresetButton: NSButton {
         }
 
         // Label
-        let label = layout.name as NSString
+        let label = L10n.layoutName(layout.name) as NSString
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.labelColor,
@@ -265,7 +270,7 @@ class CustomGridEditor: NSView {
 
     private func setupControls() {
         // Rows control
-        let rl = NSTextField(labelWithString: "Rows:")
+        let rl = NSTextField(labelWithString: L10n.text("Rows:", "行："))
         rl.frame = NSRect(x: 20, y: bounds.height - 40, width: 40, height: 20)
         rl.autoresizingMask = [.minYMargin]
         addSubview(rl)
@@ -282,7 +287,7 @@ class CustomGridEditor: NSView {
         addSubview(rowsStepper)
 
         // Cols control
-        let cl = NSTextField(labelWithString: "Cols:")
+        let cl = NSTextField(labelWithString: L10n.text("Cols:", "列："))
         cl.frame = NSRect(x: 120, y: bounds.height - 40, width: 35, height: 20)
         cl.autoresizingMask = [.minYMargin]
         addSubview(cl)
@@ -299,21 +304,21 @@ class CustomGridEditor: NSView {
         addSubview(colsStepper)
 
         // Merge button
-        let mergeBtn = NSButton(title: "Merge Selected", target: self, action: #selector(mergeSelected))
+        let mergeBtn = NSButton(title: L10n.text("Merge Selected", "合并所选"), target: self, action: #selector(mergeSelected))
         mergeBtn.frame = NSRect(x: 220, y: bounds.height - 44, width: 120, height: 28)
         mergeBtn.bezelStyle = .rounded
         mergeBtn.autoresizingMask = [.minYMargin]
         addSubview(mergeBtn)
 
         // Reset button
-        let resetBtn = NSButton(title: "Reset", target: self, action: #selector(resetClicked))
+        let resetBtn = NSButton(title: L10n.text("Reset", "重置"), target: self, action: #selector(resetClicked))
         resetBtn.frame = NSRect(x: 345, y: bounds.height - 44, width: 70, height: 28)
         resetBtn.bezelStyle = .rounded
         resetBtn.autoresizingMask = [.minYMargin]
         addSubview(resetBtn)
 
         // Apply button
-        let applyBtn = NSButton(title: "Apply", target: self, action: #selector(applyClicked))
+        let applyBtn = NSButton(title: L10n.text("Apply", "应用"), target: self, action: #selector(applyClicked))
         applyBtn.frame = NSRect(x: 420, y: bounds.height - 44, width: 70, height: 28)
         applyBtn.bezelStyle = .rounded
         applyBtn.keyEquivalent = "\r"
@@ -357,8 +362,11 @@ class CustomGridEditor: NSView {
         }
         guard allSelected else {
             let alert = NSAlert()
-            alert.messageText = "Selection must be rectangular"
-            alert.informativeText = "Select a rectangular group of cells to merge."
+            alert.messageText = L10n.text("Selection must be rectangular", "所选区域必须是矩形")
+            alert.informativeText = L10n.text(
+                "Select a rectangular group of cells to merge.",
+                "请选择一组矩形单元格后再合并。"
+            )
             alert.runModal()
             return
         }
@@ -371,8 +379,11 @@ class CustomGridEditor: NSView {
             let overlapC = max(minC, zone.col) <= min(maxC, zoneMaxC)
             if overlapR && overlapC {
                 let alert = NSAlert()
-                alert.messageText = "Overlaps existing merged zone"
-                alert.informativeText = "Undo or reset before merging overlapping areas."
+                alert.messageText = L10n.text("Overlaps existing merged zone", "与已合并区域重叠")
+                alert.informativeText = L10n.text(
+                    "Undo or reset before merging overlapping areas.",
+                    "请先撤销或重置，再合并重叠区域。"
+                )
                 alert.runModal()
                 return
             }
@@ -389,14 +400,17 @@ class CustomGridEditor: NSView {
     @objc private func applyClicked() {
         // Ask user for a name
         let alert = NSAlert()
-        alert.messageText = "Save Layout"
-        alert.informativeText = "Give this layout a name to save it as a preset:"
-        alert.addButton(withTitle: "Save & Apply")
-        alert.addButton(withTitle: "Apply Without Saving")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L10n.text("Save Layout", "保存布局")
+        alert.informativeText = L10n.text(
+            "Give this layout a name to save it as a preset:",
+            "给这个布局命名，并保存为预设："
+        )
+        alert.addButton(withTitle: L10n.text("Save & Apply", "保存并应用"))
+        alert.addButton(withTitle: L10n.text("Apply Without Saving", "仅应用不保存"))
+        alert.addButton(withTitle: L10n.text("Cancel", "取消"))
 
         let nameField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        nameField.stringValue = "Custom (\(baseRows)×\(baseCols))"
+        nameField.stringValue = L10n.layoutName("Custom (\(baseRows)×\(baseCols))")
         alert.accessoryView = nameField
 
         let response = alert.runModal()
@@ -405,7 +419,7 @@ class CustomGridEditor: NSView {
         var layout = buildLayout()
         if response == .alertFirstButtonReturn {
             // Save with custom name
-            let name = nameField.stringValue.isEmpty ? "Custom (\(baseRows)×\(baseCols))" : nameField.stringValue
+            let name = nameField.stringValue.isEmpty ? L10n.layoutName("Custom (\(baseRows)×\(baseCols))") : nameField.stringValue
             layout = GridLayout(name: name, baseRows: layout.baseRows, baseCols: layout.baseCols, zones: layout.zones)
             ConfigStore.shared.saveLayout(layout)
             onSaved?()
@@ -434,7 +448,7 @@ class CustomGridEditor: NSView {
             }
         }
 
-        return GridLayout(name: "Custom (\(baseRows)×\(baseCols))", baseRows: baseRows, baseCols: baseCols, zones: allZones)
+        return GridLayout(name: L10n.layoutName("Custom (\(baseRows)×\(baseCols))"), baseRows: baseRows, baseCols: baseCols, zones: allZones)
     }
 
     // MARK: - Drawing

@@ -109,13 +109,26 @@ make build      # 调试构建
 make release    # 发布构建
 make app        # 打包为 .app
 make install    # 安装到 /Applications
-make dmg        # 创建 dist/WindowGrid-macOS.dmg
-make notarize NOTARY_PROFILE=windowgrid-notary  # 公证并装订 DMG
+make dev-dmg    # 创建本地/开发签名的 dist/WindowGrid-macOS.dmg
+make dmg        # 创建 Developer ID 签名的 dist/WindowGrid-macOS.dmg
+make release-check NOTARY_PROFILE=windowgrid-notary  # 检查 Developer ID 和公证前置条件
+make release-dmg NOTARY_PROFILE=windowgrid-notary  # 签名、公证、装订并验证 DMG
 make run        # 构建并运行（调试模式）
 make clean      # 清理构建产物
 ```
 
-如果要通过 GitHub Releases 或官网提供下载，请先安装 **Developer ID Application** 证书，并在发布前完成 DMG 公证。
+如果要通过 GitHub Releases 或官网提供下载，请先安装 **Developer ID Application** 证书，并创建 notarytool 钥匙串配置：
+
+```bash
+xcrun notarytool store-credentials windowgrid-notary \
+  --apple-id you@example.com \
+  --team-id TEAMID \
+  --password app-specific-password
+
+make release-dmg NOTARY_PROFILE=windowgrid-notary
+```
+
+`make dmg` 在没有 Developer ID Application 证书时会主动失败，避免发布包悄悄退回 Apple Development 或 ad-hoc 签名。
 
 ## 开源协议
 

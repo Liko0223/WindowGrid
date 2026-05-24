@@ -1,0 +1,2 @@
+"NSAccessibilityUsageDescription" = "WindowGrid 需要辅助功能权限来移动和调整窗口大小。";
+"NSAppleEventsUsageDescription" = "WindowGrid 需要控制“系统事件”的权限，以便你可以从桌面提示中切换 macOS 桌面。";
