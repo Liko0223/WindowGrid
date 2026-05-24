@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="WindowGrid 是开源 macOS 窗口管理工具。按住修饰键拖拽窗口，松手即可吸附到网格布局。">
+    <meta name="theme-color" content="#f7f5ee">
+    <title>WindowGrid - macOS 窗口网格管理工具</title>
+    <link rel="icon" href="/assets/windowgrid-icon.png">
+    <link rel="apple-touch-icon" href="/assets/windowgrid-icon.png">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="WindowGrid 首页">
+        <img src="/assets/windowgrid-icon.png" alt="" width="36" height="36">
+        <span>WindowGrid</span>
+      </a>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="#features">功能</a>
+        <a href="#install">安装</a>
+        <a href="https://github.com/Liko0223/WindowGrid" rel="noreferrer">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">Open-source macOS window management</p>
+          <h1 id="hero-title">WindowGrid</h1>
+          <p class="hero-lede">按住修饰键拖拽任意窗口，松手即吸附到网格区域。给 macOS 桌面一个轻量、可记忆、适合超宽屏的窗口秩序。</p>
+          <div class="hero-actions" aria-label="下载和源码">
+            <a class="button primary" href="/downloads/WindowGrid-macOS.dmg" download>下载 DMG</a>
+            <a class="button secondary" href="https://github.com/Liko0223/WindowGrid/releases" rel="noreferrer">查看 Releases</a>
+          </div>
+          <p class="compatibility">macOS 13 Ventura 或更高版本。首次启动需要授权辅助功能权限。</p>
+        </div>
+
+        <div class="hero-visual" aria-label="WindowGrid 拖拽吸附示意图">
+          <div class="desktop-frame">
+            <div class="traffic" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="workspace">
+              <div class="window-note main-window">
+                <span class="window-title">Design.fig</span>
+              </div>
+              <div class="window-note side-window">
+                <span class="window-title">Terminal</span>
+              </div>
+              <div class="grid-overlay" aria-hidden="true">
+                <span class="zone active"></span>
+                <span class="zone"></span>
+                <span class="zone"></span>
+                <span class="zone"></span>
+                <span class="zone"></span>
+                <span class="zone"></span>
+              </div>
+            </div>
+          </div>
+          <div class="modifier-strip">
+            <img src="/assets/windowgrid-icon.png" alt="" width="52" height="52">
+            <span>Control + Drag</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="feature-band" id="features" aria-labelledby="features-title">
+        <div class="section-heading">
+          <p class="eyebrow">必要功能，不打扰</p>
+          <h2 id="features-title">把窗口放到该在的位置</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <h3>拖拽吸附</h3>
+            <p>按住 Control、Command、Shift 或 Option 拖动窗口，网格覆盖层会显示目标区域。</p>
+          </article>
+          <article class="feature-card">
+            <h3>按桌面记忆布局</h3>
+            <p>同一显示器的不同 macOS 桌面/Space 可以保留不同版式，不用反复切换。</p>
+          </article>
+          <article class="feature-card">
+            <h3>九种预设布局</h3>
+            <p>6 格、9 格、三列、双列、宽屏上下布局，以及适合超宽屏的组合布局。</p>
+          </article>
+          <article class="feature-card">
+            <h3>自定义网格</h3>
+            <p>调整行列数、合并格子，创建适合你工作流的窗口版式。</p>
+          </article>
+          <article class="feature-card">
+            <h3>一键排列</h3>
+            <p>把当前桌面的可见窗口自动填入网格，多余窗口自动最小化。</p>
+          </article>
+          <article class="feature-card">
+            <h3>场景记忆</h3>
+            <p>保存和恢复命名窗口场景，并可记住浏览器标签页 URL。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="install-band" id="install" aria-labelledby="install-title">
+        <div class="install-copy">
+          <p class="eyebrow">Install</p>
+          <h2 id="install-title">下载后拖进 Applications</h2>
+          <p>WindowGrid 是菜单栏应用，不占 Dock。首次打开时 macOS 会要求确认来源，并提示授权辅助功能权限，用于移动和调整窗口大小。</p>
+        </div>
+        <ol class="steps" aria-label="安装步骤">
+          <li>
+            <span>1</span>
+            <p>下载 DMG，打开后将 WindowGrid 拖入 Applications。</p>
+          </li>
+          <li>
+            <span>2</span>
+            <p>第一次启动时右键 app，选择打开。</p>
+          </li>
+          <li>
+            <span>3</span>
+            <p>在系统设置中授予辅助功能权限，然后从菜单栏开始使用。</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="source-band" aria-labelledby="source-title">
+        <div>
+          <p class="eyebrow">Open Source</p>
+          <h2 id="source-title">纯 Swift + AppKit，无第三方依赖</h2>
+        </div>
+        <a class="button secondary" href="https://github.com/Liko0223/WindowGrid" rel="noreferrer">打开 GitHub</a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>WindowGrid</span>
+      <span>MIT Licensed</span>
+    </footer>
+  </body>
+</html>

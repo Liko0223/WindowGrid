@@ -246,7 +246,7 @@ final class DesktopToastView: NSView, NSTextFieldDelegate {
         editField.focusRingType = .none
         editField.font = .systemFont(ofSize: 14, weight: .semibold)
         editField.textColor = NSColor.white.withAlphaComponent(0.96)
-        editField.placeholderString = "Desktop name"
+        editField.placeholderString = L10n.text("Desktop name", "桌面名称")
         editField.delegate = self
         editField.target = self
         editField.action = #selector(editFieldAction)

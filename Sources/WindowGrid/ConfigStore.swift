@@ -10,10 +10,10 @@ enum ActivationModifierKey: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .option: return "Option"
-        case .control: return "Control"
-        case .command: return "Command"
-        case .shift: return "Shift"
+        case .option: return L10n.text("Option", "Option")
+        case .control: return L10n.text("Control", "Control")
+        case .command: return L10n.text("Command", "Command")
+        case .shift: return L10n.text("Shift", "Shift")
         }
     }
 
@@ -173,9 +173,9 @@ struct LayoutContext {
 
     var label: String {
         if let spaceID = spaceID {
-            return "Display \(displayID), Desktop \(spaceID)"
+            return L10n.text("Display \(displayID), Desktop \(spaceID)", "显示器 \(displayID)，桌面 \(spaceID)")
         }
-        return "Display \(displayID)"
+        return L10n.text("Display \(displayID)", "显示器 \(displayID)")
     }
 
     static func current(for screen: NSScreen) -> LayoutContext {
@@ -577,7 +577,7 @@ struct AppConfig: Codable {
         arrangeShortcut: KeyboardShortcut? = .defaultArrange,
         newBrowserShortcut: KeyboardShortcut? = .defaultNewBrowser,
         newBrowserBundleID: String = BrowserChoice.defaultBundleID,
-        adaptiveArrangeEnabled: Bool = false,
+        adaptiveArrangeEnabled: Bool = true,
         liveAdaptiveGridEnabled: Bool = false,
         layoutAssignments: [String: String] = [:],
         desktopNames: [String: String] = [:],
@@ -614,7 +614,7 @@ struct AppConfig: Codable {
         arrangeShortcut = try container.decodeIfPresent(KeyboardShortcut.self, forKey: .arrangeShortcut) ?? .defaultArrange
         newBrowserShortcut = try container.decodeIfPresent(KeyboardShortcut.self, forKey: .newBrowserShortcut) ?? .defaultNewBrowser
         newBrowserBundleID = try container.decodeIfPresent(String.self, forKey: .newBrowserBundleID) ?? BrowserChoice.defaultBundleID
-        adaptiveArrangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .adaptiveArrangeEnabled) ?? false
+        adaptiveArrangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .adaptiveArrangeEnabled) ?? true
         liveAdaptiveGridEnabled = try container.decodeIfPresent(Bool.self, forKey: .liveAdaptiveGridEnabled) ?? false
         layoutAssignments = try container.decodeIfPresent([String: String].self, forKey: .layoutAssignments) ?? [:]
         desktopNames = try container.decodeIfPresent([String: String].self, forKey: .desktopNames) ?? [:]

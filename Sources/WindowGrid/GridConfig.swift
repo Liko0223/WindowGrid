@@ -201,8 +201,6 @@ struct GridLayout: Codable, Equatable {
                         Zone(row: 0, col: 2, rowSpan: 2, colSpan: 1),
                     ]
                 ),
-                GridLayout(name: "Adaptive 4 (2×2)", rows: 2, cols: 2),
-                GridLayout(name: "Adaptive 4 (4-Column)", rows: 1, cols: 4),
             ]
         case 5:
             return [
@@ -211,7 +209,17 @@ struct GridLayout: Codable, Equatable {
             ]
         case 6:
             return [
-                sixGrid,
+                GridLayout(
+                    name: "Adaptive 6 (Large + 4 Stack + Large)",
+                    baseRows: 2,
+                    baseCols: 4,
+                    zones: [
+                        Zone(row: 0, col: 0, rowSpan: 2, colSpan: 1),
+                        Zone(row: 0, col: 1), Zone(row: 0, col: 2),
+                        Zone(row: 1, col: 1), Zone(row: 1, col: 2),
+                        Zone(row: 0, col: 3, rowSpan: 2, colSpan: 1),
+                    ]
+                ),
             ]
         case 7:
             return [
@@ -238,10 +246,31 @@ struct GridLayout: Codable, Equatable {
             ]
         case 8:
             return [
-                GridLayout(name: "Adaptive 8 (4×2)", rows: 2, cols: 4),
+                GridLayout(
+                    name: "Adaptive 8 (Large + 6 Stack + Large)",
+                    baseRows: 2,
+                    baseCols: 5,
+                    zones: [
+                        Zone(row: 0, col: 0, rowSpan: 2, colSpan: 1),
+                        Zone(row: 0, col: 1), Zone(row: 0, col: 2), Zone(row: 0, col: 3),
+                        Zone(row: 1, col: 1), Zone(row: 1, col: 2), Zone(row: 1, col: 3),
+                        Zone(row: 0, col: 4, rowSpan: 2, colSpan: 1),
+                    ]
+                ),
             ]
         case 9:
-            return [nineGrid]
+            return [
+                GridLayout(
+                    name: "Adaptive 9 (Large + 8 Stack)",
+                    baseRows: 2,
+                    baseCols: 5,
+                    zones: [
+                        Zone(row: 0, col: 0, rowSpan: 2, colSpan: 1),
+                        Zone(row: 0, col: 1), Zone(row: 0, col: 2), Zone(row: 0, col: 3), Zone(row: 0, col: 4),
+                        Zone(row: 1, col: 1), Zone(row: 1, col: 2), Zone(row: 1, col: 3), Zone(row: 1, col: 4),
+                    ]
+                ),
+            ]
         default:
             let cols = Int(ceil(sqrt(Double(windowCount))))
             let rows = Int(ceil(Double(windowCount) / Double(cols)))

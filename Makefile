@@ -29,6 +29,7 @@ app: release
 	@cp $(BUILD_DIR)/$(APP_NAME) $(APP_BUNDLE)/Contents/MacOS/
 	@cp Resources/Info.plist $(APP_BUNDLE)/Contents/
 	@cp Resources/AppIcon.icns $(APP_BUNDLE)/Contents/Resources/ 2>/dev/null || true
+	@cp -R Resources/*.lproj $(APP_BUNDLE)/Contents/Resources/ 2>/dev/null || true
 	@if [ -n "$(CODE_SIGN_IDENTITY)" ]; then \
 		echo "Signing $(APP_BUNDLE) with $(CODE_SIGN_IDENTITY)..."; \
 		codesign --force --deep --options runtime --timestamp --sign "$(CODE_SIGN_IDENTITY)" "$(APP_BUNDLE)"; \

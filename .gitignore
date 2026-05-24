@@ -1,5 +1,16 @@
 .build/
 .swiftpm/
+.wrangler/
+.env
+.env.*
+*.pem
+*.key
+*.p8
+*.p12
+*.cer
+*.certSigningRequest
+*.mobileprovision
+*.provisionprofile
 *.xcodeproj/
 xcuserdata/
 DerivedData/
