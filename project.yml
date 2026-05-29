@@ -1,0 +1,56 @@
+name: WindowGrid
+options:
+  minimumXcodeGenVersion: 2.42.0
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.9.2
+targets:
+  WindowGrid:
+    type: application
+    platform: macOS
+    deploymentTarget: "13.0"
+    sources:
+      - path: Sources/WindowGrid
+      - path: Resources
+        excludes:
+          - Info.plist
+    info:
+      path: Resources/Info.plist
+      properties:
+        CFBundleName: WindowGrid
+        CFBundleDisplayName: WindowGrid
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundlePackageType: APPL
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        CFBundleIconFile: AppIcon
+        LSMinimumSystemVersion: "13.0"
+        LSUIElement: true
+        NSHighResolutionCapable: true
+        NSAccessibilityUsageDescription: WindowGrid needs accessibility access to move and resize windows.
+        NSAppleEventsUsageDescription: WindowGrid needs permission to control System Events so it can switch macOS desktops from the desktop toast.
+        SUEnableAutomaticChecks: true
+        SUFeedURL: https://windowgrid.pages.dev/appcast.xml
+        SUPublicEDKey: tnZA9cTVppbfWCna1RpkrafDdg+Io50SbaRabPmB2J4=
+    dependencies:
+      - package: Sparkle
+        product: Sparkle
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.windowgrid.app
+        PRODUCT_NAME: WindowGrid
+        INFOPLIST_FILE: Resources/Info.plist
+        ENABLE_HARDENED_RUNTIME: YES
+        CURRENT_PROJECT_VERSION: 2
+        MARKETING_VERSION: 0.1.1
+schemes:
+  WindowGrid:
+    build:
+      targets:
+        WindowGrid: all
+    run:
+      config: Debug
+    archive:
+      config: Release

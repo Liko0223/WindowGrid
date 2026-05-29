@@ -1,8 +1,14 @@
 import AppKit
 import Carbon.HIToolbox
+import Sparkle
 
 class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     private var statusItem: NSStatusItem!
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
     private var overlayWindows: [NSScreen: OverlayWindow] = [:]
     private var desktopToastWindows: [UInt32: DesktopToastWindow] = [:]
     private var activationModifierKey: ActivationModifierKey = .control
@@ -29,6 +35,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     private var hotKeyHandlerRef: EventHandlerRef?
     private var adaptiveArrangeCycleKey: String?
     private var adaptiveArrangeCycleIndex = 0
+    private var adaptiveArrangeCycleWindowOrder: [(window: AXUIElement, appName: String)] = []
+    private var lastAdaptiveArrangeLayouts: [String: GridLayout] = [:]
     private var lastSeenSpaceKeys: [UInt32: String] = [:]
     private var desktopToastRefreshGeneration = 0
 
@@ -210,7 +218,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         header.isEnabled = false
         menu.addItem(header)
 
-        if ConfigStore.shared.liveAdaptiveGridEnabled {
+        if ConfigStore.shared.adaptiveArrangeEnabled || ConfigStore.shared.liveAdaptiveGridEnabled {
             let adaptiveGridItem = NSMenuItem(
                 title: L10n.text("Current Grid: \(L10n.layoutName(contextLayout.name))", "当前网格：\(L10n.layoutName(contextLayout.name))"),
                 action: nil,
@@ -291,7 +299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             let item = NSMenuItem(title: L10n.layoutName(layout.name), action: #selector(switchLayout(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = layout
-            item.state = layout.name == savedContextLayout.name && !ConfigStore.shared.liveAdaptiveGridEnabled ? .on : .off
+            item.state = layout.name == savedContextLayout.name && !ConfigStore.shared.adaptiveArrangeEnabled && !ConfigStore.shared.liveAdaptiveGridEnabled ? .on : .off
             manualLayoutMenu.addItem(item)
         }
 
@@ -434,6 +442,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
         browserShortcutItem.submenu = browserShortcutMenu
         settingsMenu.addItem(browserShortcutItem)
+        settingsMenu.addItem(.separator())
+
+        let checkForUpdates = NSMenuItem(
+            title: L10n.text("Check for Updates…", "检查更新…"),
+            action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+            keyEquivalent: ""
+        )
+        checkForUpdates.target = updaterController
+        settingsMenu.addItem(checkForUpdates)
+
         settingsMenu.addItem(.separator())
 
         let preview = NSMenuItem(title: L10n.text("Preview Grid", "预览网格"), action: #selector(previewGrid), keyEquivalent: "p")
@@ -708,6 +726,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     @objc private func toggleAdaptiveArrange(_ sender: NSMenuItem) {
         let enabled = sender.state != .on
         ConfigStore.shared.setAdaptiveArrangeEnabled(enabled)
+        refreshOverlayLayouts()
         rebuildMenu()
         debugLog("ADAPTIVE_ARRANGE: \(enabled ? "enabled" : "disabled")")
     }
@@ -748,35 +767,32 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     ) {
         let visibleFrame = screen.visibleFrame
         let discoveredWindows = orderedWindows ?? WindowSnapper.getAllVisibleWindows(onScreen: screen)
-        let windows = stableWindowOrder(discoveredWindows)
-        let windowSummary = windows.enumerated()
-            .map { index, win in "\(index + 1). \(WindowSnapper.debugDescription(for: win.window, appName: win.appName))" }
-            .joined(separator: " | ")
-        debugLog("ARRANGE_WINDOWS: count=\(windows.count) \(windowSummary)")
+        var windows = stableWindowOrder(discoveredWindows)
 
         let layout: GridLayout
         let arrangedWindows: [(window: AXUIElement, appName: String)]
-        var windowOffset = 0
+        var orderVariant = 0
         if ConfigStore.shared.adaptiveArrangeEnabled {
             let context = LayoutContext.current(for: screen)
             let cycleKey = "\(context.key)|windows:\(windows.count)"
             if adaptiveArrangeCycleKey != cycleKey {
                 adaptiveArrangeCycleKey = cycleKey
                 adaptiveArrangeCycleIndex = 0
+                adaptiveArrangeCycleWindowOrder = windows
             }
-            let windowCount = max(1, windows.count)
+            windows = adaptiveCycleWindowOrder(for: windows)
             let variantCount = GridLayout.adaptiveVariantCount(forWindowCount: windows.count)
+            let orderVariantCount = adaptiveWindowOrderVariantCount(forWindowCount: windows.count)
             let variant = cycleAdaptiveLayout && variantCount > 0
-                ? (adaptiveArrangeCycleIndex / windowCount) % variantCount
+                ? (adaptiveArrangeCycleIndex / orderVariantCount) % variantCount
                 : 0
-            windowOffset = cycleAdaptiveLayout && !windows.isEmpty ? adaptiveArrangeCycleIndex % windows.count : 0
+            orderVariant = cycleAdaptiveLayout ? adaptiveArrangeCycleIndex % orderVariantCount : 0
             layout = GridLayout.adaptive(forWindowCount: windows.count, variant: variant)
-            adaptiveArrangeCycleIndex = cycleAdaptiveLayout && variantCount > 0
-                ? (adaptiveArrangeCycleIndex + 1) % (variantCount * windowCount)
+            lastAdaptiveArrangeLayouts[cycleKey] = layout
+            adaptiveArrangeCycleIndex = cycleAdaptiveLayout && variantCount > 0 && orderVariantCount > 0
+                ? (adaptiveArrangeCycleIndex + 1) % (variantCount * orderVariantCount)
                 : 0
-            arrangedWindows = windows.isEmpty
-                ? windows
-                : Array(windows.dropFirst(windowOffset)) + Array(windows.prefix(windowOffset))
+            arrangedWindows = adaptiveWindowOrder(windows, variant: orderVariant)
         } else if ConfigStore.shared.liveAdaptiveGridEnabled {
             layout = effectiveLayout(for: screen, windowCount: windows.count)
             arrangedWindows = windows
@@ -784,6 +800,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             layout = effectiveLayout(for: screen, windowCount: windows.count)
             arrangedWindows = windows
         }
+        let windowSummary = windows.enumerated()
+            .map { index, win in "\(index + 1). \(WindowSnapper.debugDescription(for: win.window, appName: win.appName))" }
+            .joined(separator: " | ")
+        debugLog("ARRANGE_WINDOWS: count=\(windows.count) \(windowSummary)")
         let zones = layout.zoneRects(in: visibleFrame)
         let zoneSummary = zones.enumerated()
             .map { index, zone in
@@ -802,8 +822,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         let mode = ConfigStore.shared.adaptiveArrangeEnabled
             ? "adaptive"
             : (ConfigStore.shared.liveAdaptiveGridEnabled ? "live adaptive" : "manual")
-        debugLog("ARRANGE: \(mode) layout=\"\(layout.name)\" windows=\(windows.count) offset=\(windowOffset) kept=\(result.kept) arranged=\(result.arranged) minimized=\(result.minimized)")
+        debugLog("ARRANGE: \(mode) layout=\"\(layout.name)\" windows=\(windows.count) orderVariant=\(orderVariant) kept=\(result.kept) arranged=\(result.arranged) minimized=\(result.minimized)")
         NSLog("WindowGrid: \(mode) arrange kept \(result.kept), arranged \(result.arranged), minimized \(result.minimized)")
+        refreshOverlayLayouts()
+        rebuildMenu()
     }
 
     private func stableWindowOrder(
@@ -822,6 +844,90 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             }
             return lhs.appName.localizedStandardCompare(rhs.appName) == .orderedAscending
         }
+    }
+
+    private func adaptiveCycleWindowOrder(
+        for windows: [(window: AXUIElement, appName: String)]
+    ) -> [(window: AXUIElement, appName: String)] {
+        guard adaptiveArrangeCycleWindowOrder.count == windows.count else {
+            adaptiveArrangeCycleIndex = 0
+            adaptiveArrangeCycleWindowOrder = windows
+            return windows
+        }
+
+        var usedIndices = Set<Int>()
+        var preservedWindows: [(window: AXUIElement, appName: String)] = []
+        for previous in adaptiveArrangeCycleWindowOrder {
+            guard let matchIndex = windows.indices.first(where: { index in
+                !usedIndices.contains(index) && isSameCycleWindow(previous.window, windows[index].window)
+            }) else {
+                adaptiveArrangeCycleIndex = 0
+                adaptiveArrangeCycleWindowOrder = windows
+                return windows
+            }
+            usedIndices.insert(matchIndex)
+            preservedWindows.append(windows[matchIndex])
+        }
+        adaptiveArrangeCycleWindowOrder = preservedWindows
+        return preservedWindows
+    }
+
+    private func isSameCycleWindow(_ lhs: AXUIElement, _ rhs: AXUIElement) -> Bool {
+        if CFEqual(lhs, rhs) { return true }
+
+        var lhsPid: pid_t = 0
+        var rhsPid: pid_t = 0
+        AXUIElementGetPid(lhs, &lhsPid)
+        AXUIElementGetPid(rhs, &rhsPid)
+        guard lhsPid == rhsPid else { return false }
+
+        let lhsTitle = windowTitle(lhs)
+        return !lhsTitle.isEmpty && lhsTitle == windowTitle(rhs)
+    }
+
+    private func windowTitle(_ window: AXUIElement) -> String {
+        var titleRef: AnyObject?
+        AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef)
+        return titleRef as? String ?? ""
+    }
+
+    private func adaptiveWindowOrderVariantCount(forWindowCount count: Int) -> Int {
+        switch count {
+        case 0, 1:
+            return 1
+        case 2:
+            return 2
+        case 3:
+            return 6
+        default:
+            return max(1, count)
+        }
+    }
+
+    private func adaptiveWindowOrder(
+        _ windows: [(window: AXUIElement, appName: String)],
+        variant: Int
+    ) -> [(window: AXUIElement, appName: String)] {
+        guard windows.count > 1 else { return windows }
+
+        if windows.count == 2 {
+            return variant % 2 == 0 ? windows : [windows[1], windows[0]]
+        }
+
+        if windows.count == 3 {
+            let orders = [
+                [0, 1, 2],
+                [1, 0, 2],
+                [0, 2, 1],
+                [1, 2, 0],
+                [2, 0, 1],
+                [2, 1, 0],
+            ]
+            return orders[variant % orders.count].map { windows[$0] }
+        }
+
+        let offset = variant % windows.count
+        return Array(windows.dropFirst(offset)) + Array(windows.prefix(offset))
     }
 
     private func arrangeAfterNewBrowserWindow(
@@ -1090,12 +1196,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     }
 
     private func effectiveLayout(for screen: NSScreen, windowCount: Int? = nil) -> GridLayout {
-        guard ConfigStore.shared.liveAdaptiveGridEnabled else {
-            return ConfigStore.shared.layout(for: screen)
+        let count = windowCount ?? WindowSnapper.getAllVisibleWindows(onScreen: screen).count
+
+        if ConfigStore.shared.adaptiveArrangeEnabled {
+            let key = adaptiveArrangeLayoutKey(for: screen, windowCount: count)
+            return lastAdaptiveArrangeLayouts[key] ?? GridLayout.adaptive(forWindowCount: count)
         }
 
-        let count = windowCount ?? WindowSnapper.getAllVisibleWindows(onScreen: screen).count
-        return GridLayout.liveAdaptive(forWindowCount: count)
+        if ConfigStore.shared.liveAdaptiveGridEnabled {
+            return GridLayout.liveAdaptive(forWindowCount: count)
+        }
+
+        return ConfigStore.shared.layout(for: screen)
+    }
+
+    private func adaptiveArrangeLayoutKey(for screen: NSScreen, windowCount: Int) -> String {
+        let context = LayoutContext.current(for: screen)
+        return "\(context.key)|windows:\(windowCount)"
     }
 
     @objc private func saveCurrentScene() {

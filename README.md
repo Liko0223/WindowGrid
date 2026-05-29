@@ -39,9 +39,9 @@
 
 ### Download
 
-Download the latest `.zip` from [Releases](https://github.com/Liko0223/WindowGrid/releases), unzip, and drag `WindowGrid.app` to `/Applications`.
+Download the latest signed `.dmg` from [Releases](https://github.com/Liko0223/WindowGrid/releases), open it, and drag `WindowGrid.app` to `/Applications`.
 
-> **Note:** On first launch, right-click the app → Open (required for unsigned apps). You'll also be prompted to grant Accessibility permission.
+You'll be prompted to grant Accessibility permission on first launch.
 
 ### Build from source
 
@@ -114,6 +114,14 @@ make release-dmg NOTARY_PROFILE=windowgrid-notary  # Sign, notarize, staple, and
 make run        # Build and run (debug)
 make clean      # Clean build artifacts
 ```
+
+WindowGrid uses Sparkle 2 for in-app updates. Release builds should use monotonically increasing bundle versions:
+
+```bash
+make release-dmg NOTARY_PROFILE=windowgrid-notary MARKETING_VERSION=0.1.1 CURRENT_PROJECT_VERSION=2
+```
+
+This builds with Xcode, signs Sparkle's helper tools correctly, produces the notarized DMG, and writes `site/appcast.xml`. See `docs/sparkle-updates.md`.
 
 For public downloads outside the Mac App Store, install a **Developer ID Application** certificate and create a notarytool keychain profile before publishing:
 
