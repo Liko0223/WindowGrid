@@ -142,6 +142,7 @@ appcast: resolve-packages
 	@cp "$(DMG_PATH)" "$(APPCAST_WORK_DIR)/$(DMG_NAME)"
 	@if [ -f "docs/release-notes/$(MARKETING_VERSION).md" ]; then \
 		cp "docs/release-notes/$(MARKETING_VERSION).md" "$(APPCAST_WORK_DIR)/$(APP_NAME)-macOS.md"; \
+		cp "docs/release-notes/$(MARKETING_VERSION).md" "$(dir $(APPCAST_PATH))/$(APP_NAME)-macOS.md"; \
 	fi
 	@(cd "$(APPCAST_WORK_DIR)" && "$(SPARKLE_GENERATE_APPCAST)" --download-url-prefix "$(APPCAST_DOWNLOAD_URL_PREFIX)" -o appcast.xml ".")
 	@cp "$(APPCAST_WORK_DIR)/appcast.xml" "$(APPCAST_PATH)"
