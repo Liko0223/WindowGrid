@@ -79,6 +79,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
         debugLog("START: accessibility=\(WindowSnapper.isAccessibilityTrusted), modifier=\(activationModifierKey.rawValue)")
         NSLog("WindowGrid: Started with \(activationModifierKey.displayName) drag modifier")
+
+        scheduleStartupUpdateCheck()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -88,6 +90,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         if let hotKeyHandlerRef = hotKeyHandlerRef {
             RemoveEventHandler(hotKeyHandlerRef)
             self.hotKeyHandlerRef = nil
+        }
+    }
+
+    private func scheduleStartupUpdateCheck() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self, self.updaterController.updater.canCheckForUpdates else { return }
+            self.updaterController.updater.checkForUpdatesInBackground()
         }
     }
 

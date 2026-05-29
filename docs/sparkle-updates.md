@@ -21,7 +21,7 @@ make release-check NOTARY_PROFILE=windowgrid-notary
 make release-dmg \
   NOTARY_PROFILE=windowgrid-notary \
   MARKETING_VERSION=0.1.1 \
-  CURRENT_PROJECT_VERSION=2
+  CURRENT_PROJECT_VERSION=4
 ```
 
 `make release-dmg` will:
@@ -58,4 +58,4 @@ codesign --verify --deep --strict --verbose=2 WindowGrid.app
 plutil -p WindowGrid.app/Contents/Info.plist | rg 'SU|CFBundle'
 ```
 
-Sparkle checks automatically about once per day. For manual testing, use `Settings > Check for Updates...`.
+Sparkle checks automatically on its regular schedule and WindowGrid also starts a background check shortly after launch. For manual testing, use `Settings > Check for Updates...`.
