@@ -272,12 +272,28 @@ struct GridLayout: Codable, Equatable {
                 ),
             ]
         default:
-            let cols = Int(ceil(sqrt(Double(windowCount))))
-            let rows = Int(ceil(Double(windowCount) / Double(cols)))
-            return [
-                GridLayout(name: "Adaptive \(windowCount) (\(cols)×\(rows))", rows: rows, cols: cols),
-            ]
+            return [balancedAdaptiveGrid(forWindowCount: windowCount)]
         }
+    }
+
+    private static func balancedAdaptiveGrid(forWindowCount windowCount: Int) -> GridLayout {
+        let cols = Int(ceil(sqrt(Double(windowCount))))
+        let rows = Int(ceil(Double(windowCount) / Double(cols)))
+        var zones: [Zone] = []
+
+        for row in 0..<rows {
+            for col in 0..<cols {
+                guard zones.count < windowCount else { break }
+                zones.append(Zone(row: row, col: col))
+            }
+        }
+
+        return GridLayout(
+            name: "Adaptive \(windowCount) (\(cols)×\(rows))",
+            baseRows: rows,
+            baseCols: cols,
+            zones: zones
+        )
     }
 
     // MARK: - Zone Rect Calculation

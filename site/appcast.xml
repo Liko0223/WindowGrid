@@ -4,12 +4,12 @@
         <title>WindowGrid</title>
         <item>
             <title>0.1.1</title>
-            <pubDate>Fri, 29 May 2026 14:29:33 +0800</pubDate>
-            <sparkle:version>2</sparkle:version>
+            <pubDate>Fri, 29 May 2026 14:44:29 +0800</pubDate>
+            <sparkle:version>3</sparkle:version>
             <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <sparkle:releaseNotesLink>https://windowgrid.pages.dev/WindowGrid-macOS.md</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/Liko0223/WindowGrid/releases/download/v0.1.1/WindowGrid-macOS.dmg" length="5602827" type="application/octet-stream" sparkle:edSignature="uqc7N3J7lmgIIeuC+V9cNv1BrKPkdsQyLGTVj8HiHUZ5QAl66l7HPpgvVTz36yF86plL5+4l2Pbsb7ZtOavwAA=="/>
+            <enclosure url="https://github.com/Liko0223/WindowGrid/releases/download/v0.1.1/WindowGrid-macOS.dmg" length="5602980" type="application/octet-stream" sparkle:edSignature="hSnsi0qp6qkrwS7CvGVkfmosutuurgR+nBNCo2VgCzUHr4JtY1WzjqWzsiMGE8BTqiAUl8YQb7HW1ZO3tzMKDA=="/>
         </item>
     </channel>
 </rss>

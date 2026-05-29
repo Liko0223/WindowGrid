@@ -789,8 +789,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             orderVariant = cycleAdaptiveLayout ? adaptiveArrangeCycleIndex % orderVariantCount : 0
             layout = GridLayout.adaptive(forWindowCount: windows.count, variant: variant)
             lastAdaptiveArrangeLayouts[cycleKey] = layout
-            adaptiveArrangeCycleIndex = cycleAdaptiveLayout && variantCount > 0 && orderVariantCount > 0
-                ? (adaptiveArrangeCycleIndex + 1) % (variantCount * orderVariantCount)
+            let cycleCount = adaptiveArrangeCycleCount(layoutVariants: variantCount, orderVariants: orderVariantCount)
+            adaptiveArrangeCycleIndex = cycleAdaptiveLayout && cycleCount > 0
+                ? nextAdaptiveArrangeCycleIndex(current: adaptiveArrangeCycleIndex, cycleCount: cycleCount)
                 : 0
             arrangedWindows = adaptiveWindowOrder(windows, variant: orderVariant)
         } else if ConfigStore.shared.liveAdaptiveGridEnabled {
@@ -892,16 +893,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     }
 
     private func adaptiveWindowOrderVariantCount(forWindowCount count: Int) -> Int {
-        switch count {
-        case 0, 1:
-            return 1
-        case 2:
-            return 2
-        case 3:
-            return 6
-        default:
-            return max(1, count)
-        }
+        count <= 1 ? 1 : factorialClamped(count)
     }
 
     private func adaptiveWindowOrder(
@@ -910,24 +902,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     ) -> [(window: AXUIElement, appName: String)] {
         guard windows.count > 1 else { return windows }
 
-        if windows.count == 2 {
-            return variant % 2 == 0 ? windows : [windows[1], windows[0]]
+        return permutationIndices(count: windows.count, variant: variant).map { windows[$0] }
+    }
+
+    private func permutationIndices(count: Int, variant: Int) -> [Int] {
+        guard count > 1 else { return Array(0..<count) }
+
+        var pool = Array(0..<count)
+        var result: [Int] = []
+        var index = variant % factorialClamped(count)
+
+        for remaining in stride(from: count, through: 1, by: -1) {
+            let blockSize = factorialClamped(remaining - 1)
+            let selectedIndex = blockSize > 0 ? (index / blockSize) % remaining : 0
+            result.append(pool.remove(at: selectedIndex))
+            index = blockSize > 0 ? index % blockSize : 0
         }
 
-        if windows.count == 3 {
-            let orders = [
-                [0, 1, 2],
-                [1, 0, 2],
-                [0, 2, 1],
-                [1, 2, 0],
-                [2, 0, 1],
-                [2, 1, 0],
-            ]
-            return orders[variant % orders.count].map { windows[$0] }
-        }
+        return result
+    }
 
-        let offset = variant % windows.count
-        return Array(windows.dropFirst(offset)) + Array(windows.prefix(offset))
+    private func factorialClamped(_ value: Int) -> Int {
+        guard value > 1 else { return 1 }
+
+        var result = 1
+        for multiplier in 2...value {
+            if result > Int.max / multiplier {
+                return Int.max
+            }
+            result *= multiplier
+        }
+        return result
+    }
+
+    private func adaptiveArrangeCycleCount(layoutVariants: Int, orderVariants: Int) -> Int {
+        guard layoutVariants > 0 && orderVariants > 0 else { return 0 }
+        let (cycleCount, overflow) = layoutVariants.multipliedReportingOverflow(by: orderVariants)
+        return overflow ? Int.max : cycleCount
+    }
+
+    private func nextAdaptiveArrangeCycleIndex(current: Int, cycleCount: Int) -> Int {
+        current >= cycleCount - 1 ? 0 : current + 1
     }
 
     private func arrangeAfterNewBrowserWindow(
