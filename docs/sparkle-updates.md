@@ -20,8 +20,8 @@ Use a monotonically increasing `CURRENT_PROJECT_VERSION` for every public update
 make release-check NOTARY_PROFILE=windowgrid-notary
 make release-dmg \
   NOTARY_PROFILE=windowgrid-notary \
-  MARKETING_VERSION=0.1.1 \
-  CURRENT_PROJECT_VERSION=4
+  MARKETING_VERSION=0.1.2 \
+  CURRENT_PROJECT_VERSION=5
 ```
 
 `make release-dmg` will:
@@ -34,7 +34,7 @@ make release-dmg \
 Upload the DMG to the matching immutable GitHub Release tag:
 
 ```bash
-gh release upload v0.1.1 dist/WindowGrid-macOS.dmg --clobber
+gh release upload v0.1.2 dist/WindowGrid-macOS.dmg --clobber
 wrangler pages deploy site --project-name windowgrid
 ```
 

@@ -564,6 +564,7 @@ struct AppConfig: Codable {
     var newBrowserBundleID: String
     var adaptiveArrangeEnabled: Bool
     var liveAdaptiveGridEnabled: Bool
+    var autoLayoutRepairEnabled: Bool
     var layoutAssignments: [String: String]
     var desktopNames: [String: String]
     var toastPosition: ToastPosition?
@@ -579,6 +580,7 @@ struct AppConfig: Codable {
         newBrowserBundleID: String = BrowserChoice.defaultBundleID,
         adaptiveArrangeEnabled: Bool = true,
         liveAdaptiveGridEnabled: Bool = false,
+        autoLayoutRepairEnabled: Bool = false,
         layoutAssignments: [String: String] = [:],
         desktopNames: [String: String] = [:],
         toastPosition: ToastPosition? = nil,
@@ -593,6 +595,7 @@ struct AppConfig: Codable {
         self.newBrowserBundleID = newBrowserBundleID
         self.adaptiveArrangeEnabled = adaptiveArrangeEnabled
         self.liveAdaptiveGridEnabled = liveAdaptiveGridEnabled
+        self.autoLayoutRepairEnabled = autoLayoutRepairEnabled
         self.layoutAssignments = layoutAssignments
         self.desktopNames = desktopNames
         self.toastPosition = toastPosition
@@ -616,6 +619,7 @@ struct AppConfig: Codable {
         newBrowserBundleID = try container.decodeIfPresent(String.self, forKey: .newBrowserBundleID) ?? BrowserChoice.defaultBundleID
         adaptiveArrangeEnabled = try container.decodeIfPresent(Bool.self, forKey: .adaptiveArrangeEnabled) ?? true
         liveAdaptiveGridEnabled = try container.decodeIfPresent(Bool.self, forKey: .liveAdaptiveGridEnabled) ?? false
+        autoLayoutRepairEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoLayoutRepairEnabled) ?? false
         layoutAssignments = try container.decodeIfPresent([String: String].self, forKey: .layoutAssignments) ?? [:]
         desktopNames = try container.decodeIfPresent([String: String].self, forKey: .desktopNames) ?? [:]
         toastPosition = try container.decodeIfPresent(ToastPosition.self, forKey: .toastPosition)
@@ -720,6 +724,15 @@ class ConfigStore {
 
     func setLiveAdaptiveGridEnabled(_ enabled: Bool) {
         config.liveAdaptiveGridEnabled = enabled
+        save()
+    }
+
+    var autoLayoutRepairEnabled: Bool {
+        config.autoLayoutRepairEnabled
+    }
+
+    func setAutoLayoutRepairEnabled(_ enabled: Bool) {
+        config.autoLayoutRepairEnabled = enabled
         save()
     }
 

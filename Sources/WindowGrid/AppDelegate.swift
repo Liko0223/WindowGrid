@@ -10,7 +10,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         userDriverDelegate: nil
     )
     private var overlayWindows: [NSScreen: OverlayWindow] = [:]
-    private var desktopToastWindows: [UInt32: DesktopToastWindow] = [:]
     private var activationModifierKey: ActivationModifierKey = .control
     private var layoutPanel: LayoutPanel?
     private var layoutPanelContextScreen: NSScreen?
@@ -30,6 +29,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     private var localFlagsMonitor: Any?
     private var activeSpaceObserver: NSObjectProtocol?
     private var spacePollingTimer: Timer?
+    private var autoLayoutRepairTimer: Timer?
     private var arrangeHotKeyRef: EventHotKeyRef?
     private var newBrowserHotKeyRef: EventHotKeyRef?
     private var hotKeyHandlerRef: EventHandlerRef?
@@ -38,9 +38,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     private var adaptiveArrangeCycleWindowOrder: [(window: AXUIElement, appName: String)] = []
     private var lastAdaptiveArrangeLayouts: [String: GridLayout] = [:]
     private var lastSeenSpaceKeys: [UInt32: String] = [:]
-    private var desktopToastRefreshGeneration = 0
+    private var lastAutoLayoutWindowSignature: String?
+    private var lastAutoLayoutWindowChangeDate = Date.distantPast
+    private var lastAutoLayoutRepairDate = Date.distantPast
 
     private let dragThreshold: CGFloat = 8
+    private let autoLayoutRepairCheckInterval: TimeInterval = 10
+    private let autoLayoutRepairStableDelay: TimeInterval = 5
+    private let autoLayoutRepairCooldown: TimeInterval = 45
     private let arrangeHotKeySignature = OSType(0x57475244) // WGRD
     private let arrangeHotKeyID = UInt32(1)
     private let newBrowserHotKeyID = UInt32(2)
@@ -131,17 +136,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             updateStatusBarTitle()
         }
         rebuildMenu()
-    }
-
-    private func desktopToastWindow(for screen: NSScreen) -> DesktopToastWindow {
-        let displayID = LayoutContext.displayID(for: screen)
-        if let toast = desktopToastWindows[displayID] {
-            return toast
-        }
-        let toast = DesktopToastWindow()
-        toast.toastDelegate = self
-        desktopToastWindows[displayID] = toast
-        return toast
     }
 
     private func currentContextScreen() -> NSScreen? {
@@ -289,6 +283,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         liveAdaptiveGrid.target = self
         liveAdaptiveGrid.state = ConfigStore.shared.liveAdaptiveGridEnabled ? .on : .off
         menu.addItem(liveAdaptiveGrid)
+
+        let autoLayoutRepair = NSMenuItem(
+            title: L10n.text("Auto Repair Layout", "自动修复布局"),
+            action: #selector(toggleAutoLayoutRepair(_:)),
+            keyEquivalent: ""
+        )
+        autoLayoutRepair.target = self
+        autoLayoutRepair.state = ConfigStore.shared.autoLayoutRepairEnabled ? .on : .off
+        menu.addItem(autoLayoutRepair)
 
         menu.addItem(.separator())
 
@@ -746,6 +749,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         refreshOverlayLayouts()
         rebuildMenu()
         debugLog("LIVE_ADAPTIVE_GRID: \(enabled ? "enabled" : "disabled")")
+    }
+
+    @objc private func toggleAutoLayoutRepair(_ sender: NSMenuItem) {
+        let enabled = sender.state != .on
+        ConfigStore.shared.setAutoLayoutRepairEnabled(enabled)
+        updateAutoLayoutRepairTimer()
+        rebuildMenu()
+        debugLog("AUTO_LAYOUT_REPAIR: \(enabled ? "enabled" : "disabled")")
     }
 
     @objc private func setCurrentLayoutAsDefault() {
@@ -1392,6 +1403,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
         }
 
         startSpacePolling()
+        updateAutoLayoutRepairTimer()
     }
 
     private func removeEventMonitors() {
@@ -1400,6 +1412,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             .forEach { NSEvent.removeMonitor($0) }
         spacePollingTimer?.invalidate()
         spacePollingTimer = nil
+        autoLayoutRepairTimer?.invalidate()
+        autoLayoutRepairTimer = nil
         if let activeSpaceObserver = activeSpaceObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(activeSpaceObserver)
             self.activeSpaceObserver = nil
@@ -1421,6 +1435,97 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
         debugLog("SPACE_POLL: changed displays=\(changedDisplays.map(String.init).joined(separator: ","))")
         handleActiveSpaceChanged(changedDisplayIDs: Set(changedDisplays))
+    }
+
+    private func updateAutoLayoutRepairTimer() {
+        autoLayoutRepairTimer?.invalidate()
+        autoLayoutRepairTimer = nil
+
+        guard ConfigStore.shared.autoLayoutRepairEnabled else {
+            lastAutoLayoutWindowSignature = nil
+            return
+        }
+
+        let timer = Timer(timeInterval: autoLayoutRepairCheckInterval, repeats: true) { [weak self] _ in
+            self?.runAutoLayoutRepairCheck()
+        }
+        autoLayoutRepairTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func runAutoLayoutRepairCheck() {
+        guard ConfigStore.shared.autoLayoutRepairEnabled else { return }
+        guard !isDragging, !isActivationModifierHeld else { return }
+        guard layoutPanel?.isVisible != true else { return }
+
+        let now = Date()
+        guard now.timeIntervalSince(lastAutoLayoutRepairDate) >= autoLayoutRepairCooldown else { return }
+        guard let screen = currentContextScreen() else { return }
+
+        let windows = stableWindowOrder(WindowSnapper.getAllVisibleWindows(onScreen: screen))
+        guard windows.count >= 2 else {
+            lastAutoLayoutWindowSignature = nil
+            return
+        }
+
+        let signature = windowStateSignature(for: windows)
+        if signature != lastAutoLayoutWindowSignature {
+            lastAutoLayoutWindowSignature = signature
+            lastAutoLayoutWindowChangeDate = now
+            debugLog("AUTO_LAYOUT_REPAIR: observed change windows=\(windows.count)")
+            return
+        }
+
+        guard now.timeIntervalSince(lastAutoLayoutWindowChangeDate) >= autoLayoutRepairStableDelay else {
+            return
+        }
+
+        let layout = effectiveLayout(for: screen, windowCount: windows.count)
+        let zones = layout.zoneRects(in: screen.visibleFrame)
+        guard zones.count >= windows.count else {
+            debugLog("AUTO_LAYOUT_REPAIR: skipped windows=\(windows.count) zones=\(zones.count)")
+            return
+        }
+        guard !windowsAreAligned(windows, zones: zones) else { return }
+
+        debugLog("AUTO_LAYOUT_REPAIR: repairing layout=\"\(layout.name)\" windows=\(windows.count)")
+        lastAutoLayoutRepairDate = now
+        performArrangeAllWindows(on: screen, orderedWindows: windows, cycleAdaptiveLayout: false)
+        lastAutoLayoutWindowSignature = nil
+    }
+
+    private func windowStateSignature(for windows: [(window: AXUIElement, appName: String)]) -> String {
+        windows.map { win in
+            guard let rect = WindowSnapper.getWindowRect(win.window) else {
+                return "\(win.appName)|\(windowTitle(win.window))|rect:nil"
+            }
+            let scale: CGFloat = 8
+            let x = Int(round(rect.minX / scale))
+            let y = Int(round(rect.minY / scale))
+            let width = Int(round(rect.width / scale))
+            let height = Int(round(rect.height / scale))
+            return "\(win.appName)|\(windowTitle(win.window))|\(x),\(y),\(width),\(height)"
+        }
+        .joined(separator: "||")
+    }
+
+    private func windowsAreAligned(
+        _ windows: [(window: AXUIElement, appName: String)],
+        zones: [(zone: Int, rect: NSRect)]
+    ) -> Bool {
+        guard windows.count <= zones.count else { return false }
+
+        var occupiedZoneIndices = Set<Int>()
+        for win in windows {
+            guard let rect = WindowSnapper.getWindowRect(win.window),
+                  let zoneIndex = bestAlignedZoneIndex(for: rect, zones: zones, occupied: occupiedZoneIndices)
+            else {
+                return false
+            }
+            occupiedZoneIndices.insert(zoneIndex)
+        }
+
+        return true
     }
 
     private func syncLastSeenSpaceKeys() {
@@ -1610,70 +1715,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
 
     private func handleActiveSpaceChanged(changedDisplayIDs providedDisplayIDs: Set<UInt32>? = nil) {
         debugLog("SPACE: active space changed")
-        let inferredDisplayIDs = providedDisplayIDs ?? Set(detectChangedSpaceDisplayIDs())
-        let targetDisplayIDs = inferredDisplayIDs.isEmpty ? currentContextDisplayIDs() : inferredDisplayIDs
+        if providedDisplayIDs == nil {
+            _ = detectChangedSpaceDisplayIDs()
+        }
         updateStatusBarTitle()
         rebuildMenu()
         refreshOverlayLayouts()
-        refreshDesktopToastAfterSpaceChange(displayIDs: targetDisplayIDs)
         if let screen = currentContextScreen(), layoutPanel?.isVisible == true {
             layoutPanelContextScreen = screen
             layoutPanel?.setCurrentLayout(ConfigStore.shared.layout(for: screen))
         }
-    }
-
-    private func currentContextDisplayIDs() -> Set<UInt32> {
-        guard let screen = currentContextScreen() else {
-            return Set(NSScreen.screens.map { LayoutContext.displayID(for: $0) })
-        }
-        return [LayoutContext.displayID(for: screen)]
-    }
-
-    private func refreshDesktopToastAfterSpaceChange(displayIDs: Set<UInt32>) {
-        desktopToastRefreshGeneration += 1
-        let generation = desktopToastRefreshGeneration
-        showDesktopToast(displayIDs: displayIDs)
-
-        for delay in [0.12, 0.28] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                guard let self, self.desktopToastRefreshGeneration == generation else { return }
-                self.showDesktopToast(displayIDs: displayIDs)
-            }
-        }
-    }
-
-    private func showDesktopToast(displayIDs targetDisplayIDs: Set<UInt32>? = nil) {
-        let activeDisplayIDs = Set(NSScreen.screens.map { LayoutContext.displayID(for: $0) })
-        let staleDisplayIDs = desktopToastWindows.keys.filter { !activeDisplayIDs.contains($0) }
-        for displayID in staleDisplayIDs {
-            desktopToastWindows[displayID]?.hide()
-            desktopToastWindows.removeValue(forKey: displayID)
-        }
-
-        for screen in NSScreen.screens {
-            let displayID = LayoutContext.displayID(for: screen)
-            if let targetDisplayIDs, !targetDisplayIDs.contains(displayID) {
-                continue
-            }
-            let toast = desktopToastWindow(for: screen)
-
-            let rawSpaces = LayoutContext.spaces(on: screen)
-            let effectiveCurrentSpaceID = effectiveCurrentSpaceID(in: rawSpaces)
-            let titleName = ConfigStore.shared.desktopName(for: screen)
-            let displayTitle = displayToastTitle(for: screen)
-            let title = titleName?.isEmpty == false ? titleName! : L10n.text("Desktop", "桌面")
-            debugLog("SPACE_TOAST: display=\(displayID) title=\(displayTitle) current=\(effectiveCurrentSpaceID.map(String.init) ?? "nil")")
-            toast.show(
-                title: title,
-                name: titleName,
-                near: screen,
-                savedPosition: ConfigStore.shared.toastPosition(for: screen)
-            )
-        }
-    }
-
-    private func effectiveCurrentSpaceID(in spaces: [DesktopSpace]) -> Int? {
-        return spaces.first(where: \.isCurrent)?.spaceID
     }
 
     // MARK: - Overlay Management
@@ -1711,35 +1762,4 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
             overlay.hideWithAnimation()
         }
     }
-}
-
-extension AppDelegate: DesktopToastWindowDelegate {
-    func desktopToastWindowDidMove(_ window: DesktopToastWindow) {
-        if let screen = screen(for: window) {
-            ConfigStore.shared.setToastPosition(window.frame.origin, for: screen)
-        }
-    }
-
-    func desktopToastWindow(_ window: DesktopToastWindow, didCommitDesktopName name: String) {
-        guard let screen = screen(for: window) else { return }
-        ConfigStore.shared.setDesktopName(name, for: screen)
-        updateStatusBarTitle()
-        rebuildMenu()
-        showDesktopToast()
-        debugLog("DESKTOP_NAME_INLINE: \(name)")
-    }
-
-    private func screen(for window: DesktopToastWindow) -> NSScreen? {
-        if let targetDisplayID = window.targetDisplayID,
-           let screen = NSScreen.screens.first(where: { LayoutContext.displayID(for: $0) == targetDisplayID }) {
-            return screen
-        }
-        return window.screen
-    }
-
-    private func displayToastTitle(for screen: NSScreen) -> String {
-        let index = NSScreen.screens.firstIndex(of: screen).map { $0 + 1 } ?? 1
-        return L10n.text("Display \(index)", "显示器 \(index)")
-    }
-
 }
