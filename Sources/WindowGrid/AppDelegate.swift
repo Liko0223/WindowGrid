@@ -1359,11 +1359,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, LayoutPanelDelegate {
     }
 
     @objc private func showAbout() {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+            ?? "Unknown"
         let alert = NSAlert()
         alert.messageText = "WindowGrid"
         alert.informativeText = L10n.text(
-            "Open-source window management for macOS.\n\nHold \(activationModifierKey.displayName) + drag any window to snap it to a grid zone.\n\nVersion 0.1.0",
-            "开源 macOS 窗口管理工具。\n\n按住 \(activationModifierKey.displayName) 并拖拽任意窗口，即可将它吸附到网格区域。\n\n版本 0.1.0"
+            "Open-source window management for macOS.\n\nHold \(activationModifierKey.displayName) + drag any window to snap it to a grid zone.\n\nVersion \(version)",
+            "开源 macOS 窗口管理工具。\n\n按住 \(activationModifierKey.displayName) 并拖拽任意窗口，即可将它吸附到网格区域。\n\n版本 \(version)"
         )
         alert.alertStyle = .informational
         alert.runModal()
